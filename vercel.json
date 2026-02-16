@@ -21,7 +21,7 @@
                 },
                 {
                     "key": "Content-Security-Policy",
-                    "value": "default-src 'self' https://*.supabase.co; img-src 'self' data: https://*.googleusercontent.com https://*.supabase.co; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com;"
+                    "value": "default-src 'self' https://*.supabase.co; img-src 'self' data: https://*.googleusercontent.com https://*.supabase.co; script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com;"
                 }
             ]
         }
