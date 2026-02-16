@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Metrica Agro</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+            heading: ['Outfit', 'sans-serif'],
+          },
+          colors: {
+            primary: {
+              DEFAULT: '#10b981',
+              dark: '#059669',
+              light: '#34d399',
+            },
+            secondary: '#0ea5e9',
+            slate: {
+              main: '#0f172a',
+              muted: '#64748b',
+            }
+          },
+          boxShadow: {
+            'premium': '0 10px 40px rgba(0, 0, 0, 0.04)',
+            'soft': '0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)',
+          }
+        }
+      }
+    }
+  </script>
+  <link rel="stylesheet" href="/index.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+</head>
+
+<body>
+  <div id="root"></div>
+  <script type="module" src="/index.tsx"></script>
+</body>
+
+</html>

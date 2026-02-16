@@ -1,0 +1,21 @@
+Port 3000 is in use, trying another one...
+Port 3001 is in use, trying another one...
+
+  [32m[1mVITE[22m v6.4.1[39m  [2mready in [0m[1m557[22m[2m[0m ms[22m
+
+  [32m➜[39m  [1mLocal[22m:   [36mhttp://localhost:[1m3002[22m/[39m
+  [32m➜[39m  [1mNetwork[22m: [36mhttp://192.168.0.110:[1m3002[22m/[39m
+[2m19:53:38[22m [36m[1m[vite][22m[39m [32m.env.local changed, restarting server...[39m
+[2m19:53:38[22m [36m[1m[vite][22m[39m [32m.env.local changed, restarting server...[39m
+[2m19:53:38[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/App.tsx[22m
+[2m19:53:38[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/App.tsx, /components/ProjectWorkflow.tsx, /components/ProjectManagement.tsx, /components/Dashboard.tsx, /components/FinancialReport.tsx, /components/FinancialModule.tsx, /components/DocumentPreview.tsx[22m
+[2m19:53:38[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/components/Dashboard.tsx[22m
+[2m19:53:38[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/components/DocumentPreview.tsx[22m
+[2m19:53:39[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/components/FinancialModule.tsx[22m
+[2m19:53:39[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/components/ProfessionalList.tsx[22m
+[2m19:53:39[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/components/ProjectManagement.tsx[22m
+[2m19:53:39[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/components/ProjectWorkflow.tsx[22m
+[2m19:53:39[22m [36m[1m[vite][22m[39m server restarted.
+[2m20:01:55[22m [36m[1m[vite][22m[39m [32m.env.local changed, restarting server...[39m
+[2m20:01:56[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m Re-optimizing dependencies because vite config has changed
+[2m20:01:56[22m [36m[1m[vite][22m[39m server restarted.
