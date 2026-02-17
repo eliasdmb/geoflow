@@ -44,7 +44,7 @@ import {
   Account,
   TransactionType
 } from './types';
-import { WORKFLOW_STEPS_DEFINITION } from './constants';
+import { WORKFLOW_STEPS_DEFINITION, CAR_WORKFLOW_STEPS_DEFINITION } from './constants';
 import { supabase, checkSupabaseConnection } from './lib/supabase';
 import Dashboard from './components/Dashboard';
 import ProjectManagement from './components/ProjectManagement';
@@ -131,7 +131,13 @@ const App: React.FC = () => {
   const [accounts, setAccounts] = useState<Account[]>([]);
 
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  // Initialize sidebar based on window width if available, otherwise default to true (desktop)
+  const [isSidebarOpen, setIsSidebarOpen] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return window.innerWidth >= 768;
+    }
+    return true;
+  });
   const [dbError, setDbError] = useState<string | null>(null);
 
   const userIdRef = useRef<string | null>(null);
@@ -537,17 +543,11 @@ const App: React.FC = () => {
       if (data) {
         // Filter steps based on service
         const selectedService = services.find(s => s.id === serviceId);
-        const isCarGo = selectedService?.name === 'CAR - Cadastro ambiental Rural - SIGCAR GO';
+        const isCarGo = selectedService?.name?.toUpperCase().includes('CAR');
 
         let stepsToCreate = WORKFLOW_STEPS_DEFINITION;
         if (isCarGo) {
-          const carStepIds = [
-            WorkflowStepId.BUDGET,
-            WorkflowStepId.SERVICE_ORDER,
-            WorkflowStepId.DOCUMENTATION,
-            WorkflowStepId.RECEIPT
-          ];
-          stepsToCreate = WORKFLOW_STEPS_DEFINITION.filter(s => carStepIds.includes(s.id));
+          stepsToCreate = CAR_WORKFLOW_STEPS_DEFINITION;
         }
 
         const steps = stepsToCreate.map((s, i) => ({

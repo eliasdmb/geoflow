@@ -67,3 +67,15 @@ export const isValidCpfOrCnpj = (value: string): boolean => {
   if (cleanValue.length === 14) return validateCNPJ(cleanValue);
   return false;
 };
+
+export const formatDate = (date: string | Date | null | undefined): string => {
+  if (!date) return '-';
+  const d = new Date(date);
+  if (isNaN(d.getTime())) {
+    return '-';
+  }
+  const day = String(d.getUTCDate()).padStart(2, '0');
+  const month = String(d.getUTCMonth() + 1).padStart(2, '0'); // Mês é 0-indexado
+  const year = d.getUTCFullYear();
+  return `${day}/${month}/${year}`;
+};

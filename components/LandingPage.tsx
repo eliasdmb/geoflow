@@ -79,6 +79,16 @@ const LandingPage: React.FC<LandingPageProps> = ({ onEnterApp }) => {
 
             {/* Hero Section */}
             <section className="relative pt-32 pb-20 lg:pt-48 lg:pb-32 overflow-hidden">
+                {/* Background Image */}
+                <div className="absolute inset-0 z-0">
+                    <img 
+                        src="https://images.unsplash.com/photo-1500382017468-9049fed747ef?q=80&w=2832&auto=format&fit=crop" 
+                        alt="Background Field" 
+                        className="w-full h-full object-cover opacity-5"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-b from-bg-main via-bg-main/90 to-bg-main"></div>
+                </div>
+
                 {/* Abstract Background Orbs */}
                 <div className="absolute top-0 right-0 w-[600px] h-[600px] bg-primary/5 rounded-full blur-[120px] -z-10 animate-pulse"></div>
                 <div className="absolute bottom-0 left-0 w-[500px] h-[500px] bg-secondary/5 rounded-full blur-[120px] -z-10" style={{ animationDelay: '2s' }}></div>
@@ -125,12 +135,12 @@ const LandingPage: React.FC<LandingPageProps> = ({ onEnterApp }) => {
                             </div>
                         </div>
 
-                        <div className="relative hidden lg:block animate-in fade-in zoom-in duration-1000 delay-300">
+                        <div className="relative mt-10 lg:mt-0 animate-in fade-in zoom-in duration-1000 delay-300">
                             <div className="relative z-10 glass-card p-4 rounded-[2rem] shadow-2xl overflow-hidden ring-1 ring-white/20">
                                 <img
-                                    src="https://images.unsplash.com/photo-1595113316349-9fa404641847?q=80&w=2070&auto=format&fit=crop"
-                                    alt="High Tech Agriculture"
-                                    className="rounded-3xl shadow-inner w-full h-[500px] object-cover"
+                                    src="https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?q=80&w=2070&auto=format&fit=crop"
+                                    alt="Georreferenciamento GNSS"
+                                    className="rounded-3xl shadow-inner w-full h-[300px] sm:h-[500px] object-cover"
                                 />
                                 <div className="absolute inset-0 bg-gradient-to-t from-slate-900/60 via-transparent to-transparent"></div>
 

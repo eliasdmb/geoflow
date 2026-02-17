@@ -34,6 +34,7 @@ import {
   Account,
   AccountType
 } from '../types';
+import { formatDate } from '../utils';
 import {
   BarChart,
   Bar,
@@ -607,7 +608,7 @@ const FinancialModule: React.FC<FinancialModuleProps> = ({
                     <tbody className="divide-y divide-slate-100">
                       {filteredTransactions.map(t => (
                         <tr key={t.id} className="hover:bg-slate-50 transition-all group">
-                          <td className="px-6 py-4 text-xs font-bold text-slate-600 whitespace-nowrap">{new Date(t.due_date).toLocaleDateString('pt-BR')}</td>
+                          <td className="px-6 py-4 text-xs font-bold text-slate-600 whitespace-nowrap">{formatDate(t.due_date)}</td>
                           <td className="px-6 py-4 min-w-[200px]">
                             <p className="text-xs font-bold text-slate-800">{t.description}</p>
                             <p className="text-[10px] text-slate-400 font-bold uppercase">{t.category}</p>
@@ -704,7 +705,7 @@ const FinancialModule: React.FC<FinancialModuleProps> = ({
                           <tbody>
                             {(invoice.items || []).map((item: any, idx: number) => (
                               <tr key={`${item.id || idx}-${item.current_installment || 1}`} className="group hover:bg-slate-50">
-                                <td className="py-4 text-xs font-bold text-slate-500">{item.date ? new Date(item.date).toLocaleDateString('pt-BR') : 'Sem data'}</td>
+                                <td className="py-4 text-xs font-bold text-slate-500">{formatDate(item.date)}</td>
                                 <td className="py-4 text-xs font-black text-slate-800">{item.description || 'Sem descrição'}</td>
                                 <td className="py-4 text-[9px] font-black text-slate-500">{item.current_installment || 1}/{item.installments || 1}</td>
                                 <td className="py-4 text-right font-black">{formatCurrency(item.installment_amount)}</td>
@@ -797,7 +798,7 @@ const FinancialModule: React.FC<FinancialModuleProps> = ({
                     <tbody className="divide-y divide-slate-100">
                       {reportData.map(t => (
                         <tr key={t.id} className="hover:bg-slate-50 transition-all">
-                          <td className="px-6 py-4 text-xs font-bold text-slate-600">{new Date(t.due_date).toLocaleDateString('pt-BR')}</td>
+                          <td className="px-6 py-4 text-xs font-bold text-slate-600">{formatDate(t.due_date)}</td>
                           <td className="px-6 py-4 text-xs font-bold text-slate-800">{t.description}</td>
                           <td className="px-6 py-4 text-xs font-bold text-slate-600">{t.type}</td>
                           <td className="px-6 py-4 text-xs font-bold text-slate-600">{t.category}</td>

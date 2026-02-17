@@ -18,6 +18,7 @@ import {
     TransactionType,
     TransactionStatus
 } from '../types';
+import { formatDate } from '../utils';
 import {
     BarChart,
     Bar,
@@ -108,7 +109,7 @@ const FinancialReport: React.FC<FinancialReportProps> = ({ transactions }) => {
     const exportCSV = () => {
         const headers = ['Data', 'Descrição', 'Categoria', 'Tipo', 'Status', 'Valor'];
         const rows = filteredData.map(t => [
-            new Date(t.due_date).toLocaleDateString('pt-BR'),
+            formatDate(t.due_date),
             t.description,
             t.category,
             t.type,
@@ -346,7 +347,7 @@ const FinancialReport: React.FC<FinancialReportProps> = ({ transactions }) => {
                                 filteredData.sort((a, b) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime()).map(t => (
                                     <tr key={t.id} className="hover:bg-slate-50 transition-all group">
                                         <td className="px-6 py-4 text-xs font-bold text-slate-600">
-                                            {new Date(t.due_date).toLocaleDateString('pt-BR')}
+                                            {formatDate(t.due_date)}
                                         </td>
                                         <td className="px-6 py-4">
                                             <p className="text-xs font-bold text-slate-800">{t.description}</p>

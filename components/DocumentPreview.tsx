@@ -141,6 +141,7 @@ const numeroPorExtenso = (valor: number): string => {
 };
 
 import { logAudit } from '../lib/audit';
+import { formatDate } from '../utils';
 
 const DocumentPreview: React.FC<DocumentPreviewProps> = ({
   project,
@@ -251,8 +252,11 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({
     }
   };
 
-  const selectedRegistry = allRegistries?.find(r => r.id === project?.registry_id) || allRegistries?.[0];
-  const selectedCertification = certifications?.find(c => c.project_id === project?.id || c.contract_number === project?.id) || certifications?.[0];
+  const selectedRegistry = allRegistries?.find(r => r.id === project?.registry_id);
+  const selectedCertification =
+    certifications?.find(c => c.project_id === project?.id) ||
+    certifications?.find(c => c.contract_number && (c.contract_number === project?.id || c.contract_number === project?.certification_number)) ||
+    certifications?.find(c => c.cert_number && c.cert_number === project?.certification_number);
 
   // Compute next sequential document number per document type (step.label)
   const computeNextDocNumber = (label: string): string => {
@@ -288,7 +292,9 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({
   }, [step?.id, step?.label, step?.document_number]);
 
   const getPlainTextContent = (targetStep: WorkflowStep) => {
-    if (!client || !property || !professional) return "Carregando dados do documento...";
+    if (!client || !property || !professional) {
+      return "Carregando dados do documento...";
+    }
 
     const clientAddr = client.address || { street: '', block: '', lot: '', number: '', sector: '', city: '', cep: '' };
     const formattedClientAddress = `${clientAddr.street || ''}, nº ${clientAddr.number || 'S/N'}, ${clientAddr.city || ''}`;
@@ -425,7 +431,7 @@ Endereço:\t     ${formattedClientAddress}
 4.\tDeclaração Técnica
 
 Declaro, na qualidade de profissional legalmente habilitado, que realizei os serviços técnicos de levantamento planialtimétrico georreferenciado do perímetro do imóvel rural acima descrito, obedecendo aos preceitos da legislação vigente, especialmente a Lei nº 10.267/2001, o Decreto nº 4.449/2002 e a Norma Técnica do INCRA.
-O levantamento foi executado com equipamentos GNSS, pelo método de Posicionamento por Ponto Preciso em tempo Real (RT-PPP), de precisão compatível com os padrões exigidos, e os vértices foram definidos conforme a Norma Técnica para Georreferenciamento de Imóveis Rurais. O imóvel encontra-se certificado junto ao SIGEF/INCRA, sob o número:${selectedCertification?.cert_number || ''}, emitida em ${selectedCertification?.cert_date || ''}.
+O levantamento foi executado com equipamentos GNSS, pelo método de Posicionamento por Ponto Preciso em tempo Real (RT-PPP), de precisão compatível com os padrões exigidos, e os vértices foram definidos conforme a Norma Técnica para Georreferenciamento de Imóveis Rurais. O imóvel encontra-se certificado junto ao SIGEF/INCRA, sob o número:${selectedCertification?.cert_number || ''}, emitida em ${formatDate(selectedCertification?.cert_date)}.
 Sob as penas da lei, declaro que:
 1. Não houve alteração de divisas reais e efetivas do imóvel registrado;
 2. Não houve alteração de medidas perimetrais, nem invasão de propriedades confinantes;
@@ -1098,7 +1104,7 @@ Requerente`;
                         Declaro, na qualidade de profissional legalmente habilitado, que realizei os serviços técnicos de levantamento planialtimétrico georreferenciado do perímetro do imóvel rural acima descrito, obedecendo aos preceitos da legislação vigente, especialmente a Lei nº 10.267/2001, o Decreto nº 4.449/2002 e a Norma Técnica do INCRA.
                       </p>
                       <p className="indent-6">
-                        O levantamento foi executado com equipamentos GNSS, pelo método de Posicionamento por Ponto Preciso em tempo Real (RT-PPP), de precisão compatível com os padrões exigidos, e os vértices foram definidos conforme a Norma Técnica para Georreferenciamento de Imóveis Rurais. O imóvel encontra-se certificado junto ao SIGEF/INCRA, sob o número: <strong>{selectedCertification?.cert_number || '____________'}</strong>, emitida em <strong>{selectedCertification?.cert_date || '___/___/____'}</strong>.
+                        O levantamento foi executado com equipamentos GNSS, pelo método de Posicionamento por Ponto Preciso em tempo Real (RT-PPP), de precisão compatível com os padrões exigidos, e os vértices foram definidos conforme a Norma Técnica para Georreferenciamento de Imóveis Rurais. O imóvel encontra-se certificado junto ao SIGEF/INCRA, sob o número: <strong>{selectedCertification?.cert_number || '____________'}</strong>, emitida em <strong>{selectedCertification?.cert_date ? formatDate(selectedCertification?.cert_date) : '___/___/____'}</strong>.
                       </p>
                       <p>Sob as penas da lei, declaro que:</p>
                       <ol className="list-decimal pl-10 space-y-0.5">

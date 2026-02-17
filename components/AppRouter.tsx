@@ -1,7 +1,7 @@
 // components/AppRouter.tsx
 import React from 'react';
 import { ViewState, Project, Client, RuralProperty, Professional, Service, Registry, SigefCertification, BudgetItemTemplate, FinancialTransaction, Appointment, CreditCard, CreditCardExpense, ProjectStatus, Account, WorkflowStepId } from '../types';
-import { WORKFLOW_STEPS_DEFINITION } from '../constants';
+import { WORKFLOW_STEPS_DEFINITION, CAR_WORKFLOW_STEPS_DEFINITION } from '../constants';
 import { supabase } from '../lib/supabase';
 import Dashboard from './Dashboard';
 import ProjectManagement from './ProjectManagement';
@@ -143,17 +143,11 @@ const AppRouter: React.FC<AppRouterProps> = ({
             if (!uid) return false;
             try {
               const service = services.find(s => s.id === currentProject.service_id);
-              const isCarGo = service?.name === 'CAR - Cadastro ambiental Rural - SIGCAR GO';
+              const isCarGo = service?.name?.toUpperCase().includes('CAR');
 
               let stepsToCreate = WORKFLOW_STEPS_DEFINITION;
               if (isCarGo) {
-                const carStepIds = [
-                  WorkflowStepId.BUDGET,
-                  WorkflowStepId.SERVICE_ORDER,
-                  WorkflowStepId.DOCUMENTATION,
-                  WorkflowStepId.RECEIPT
-                ];
-                stepsToCreate = WORKFLOW_STEPS_DEFINITION.filter(s => carStepIds.includes(s.id));
+                stepsToCreate = CAR_WORKFLOW_STEPS_DEFINITION;
               }
 
               await supabase.from('project_steps').delete().eq('project_id', currentProject.id);

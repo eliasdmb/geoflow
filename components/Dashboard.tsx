@@ -17,6 +17,7 @@ import {
   DollarSign,
   Map as MapIcon
 } from 'lucide-react';
+import { formatDate } from '../utils';
 import { Project, ProjectStatus, WorkflowStepId, Appointment, Client, FinancialTransaction, TransactionType, TransactionStatus } from '../types';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recharts';
 
@@ -213,7 +214,7 @@ const Dashboard: React.FC<DashboardProps> = ({ projects, appointments, clients, 
                         <div className="overflow-hidden">
                           <p className="text-base font-heading font-semibold text-slate-main truncate group-hover:text-primary transition-colors tracking-tight">{p.title}</p>
                           <p className="text-[10px] text-slate-muted font-medium uppercase tracking-widest truncate mt-0.5">
-                            <span className="text-slate-main">{new Date(p.deadline!).toLocaleDateString('pt-BR')}</span> • {p.steps?.[p.current_step_index]?.label}
+                            <span className="text-slate-main">{formatDate(p.deadline)}</span> • {p.steps?.[p.current_step_index]?.label}
                           </p>
                         </div>
                       </div>

@@ -39,6 +39,15 @@ export const WORKFLOW_STEPS_DEFINITION: { id: WorkflowStepId; label: string; has
   { id: WorkflowStepId.RECEIPT, label: 'RECIBO', hasDocument: true, icon: <Receipt size={18} /> },
 ];
 
+export const CAR_WORKFLOW_STEPS_DEFINITION: { id: WorkflowStepId; label: string; hasDocument: boolean; icon: React.ReactNode }[] = [
+  { id: WorkflowStepId.BUDGET, label: 'Orçamento', hasDocument: true, icon: <FileText size={18} /> },
+  { id: WorkflowStepId.CONTRACT, label: 'Contrato de Trabalho', hasDocument: true, icon: <FileSignature size={18} /> },
+  { id: WorkflowStepId.SERVICE_ORDER, label: 'Ordem de Serviço', hasDocument: true, icon: <ClipboardList size={18} /> },
+  { id: WorkflowStepId.DOCUMENTATION, label: 'Documentação (Checklist)', hasDocument: false, icon: <Files size={18} /> },
+  { id: WorkflowStepId.SIGEF, label: 'Cadastro no SICAR/SIGCAR', hasDocument: false, icon: <CheckCircle size={18} /> },
+  { id: WorkflowStepId.RECEIPT, label: 'RECIBO', hasDocument: true, icon: <Receipt size={18} /> },
+];
+
 export const INITIAL_CLIENTS: Client[] = [
   { 
     id: '1', 

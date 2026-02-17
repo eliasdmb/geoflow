@@ -69,7 +69,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   role,
   isMobile
 }) => {
-  const sidebarWidth = isSidebarOpen ? 'w-[var(--sidebar-width)]' : 'w-20';
+  const sidebarWidth = isMobile || isSidebarOpen ? 'w-[var(--sidebar-width)]' : 'w-20';
 
   return (
     <>

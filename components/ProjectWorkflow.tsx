@@ -152,7 +152,7 @@ const ProjectWorkflow: React.FC<ProjectWorkflowProps> = ({
   const isRioVerde = registry?.cns === RIO_VERDE_CNS;
   const isRioVerde2 = registry?.cns === RIO_VERDE_2_CNS;
 
-  const isCarGo = service?.name === 'CAR - Cadastro ambiental Rural - SIGCAR GO';
+  const isCarGo = service?.name?.toUpperCase().includes('CAR');
 
   const activeChecklist = isCarGo ? CHECKLIST_CAR_GO : (isRioVerde ? CHECKLIST_RIO_VERDE : (isRioVerde2 ? CHECKLIST_RIO_VERDE_2 : (isMontividiu ? CHECKLIST_MONTIVIDIU : [])));
   const hasChecklist = isDocumentationStep && activeChecklist.length > 0;

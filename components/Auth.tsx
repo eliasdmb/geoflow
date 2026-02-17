@@ -10,7 +10,8 @@ import {
   Key,
   WifiOff,
   ExternalLink,
-  CheckCircle2
+  CheckCircle2,
+  ShieldCheck
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
@@ -147,26 +148,89 @@ const Auth: React.FC<AuthProps> = ({ onLogin, onProgress }) => {
   };
 
   return (
-    <div className="min-h-screen w-full flex flex-col items-center justify-center bg-bg-main relative overflow-hidden text-slate-main font-sans">
-      <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-primary/10 rounded-full blur-[120px] animate-pulse"></div>
-      <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-secondary/10 rounded-full blur-[120px] animate-pulse" style={{ animationDelay: '1s' }}></div>
-
-      <div className="w-full max-w-md p-4 relative z-10 animate-in fade-in zoom-in-95 duration-1000">
-        <div className="text-center mb-10 group cursor-default">
-          <div className="w-20 h-20 bg-secondary text-white rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-premium transition-transform group-hover:scale-110 group-hover:rotate-3 duration-500">
-            <MapIcon size={36} className="text-white animate-float" />
+    <div className="min-h-screen w-full flex bg-bg-main relative overflow-hidden text-slate-main font-sans">
+      {/* Left Side - Hero Section */}
+      <div className="hidden lg:flex lg:w-1/2 relative bg-slate-900 items-center justify-center overflow-hidden">
+        <img 
+          src="https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?q=80&w=2070&auto=format&fit=crop" 
+          alt="GNSS Receiver Background" 
+          className="absolute inset-0 w-full h-full object-cover opacity-30"
+        />
+        <div className="absolute inset-0 bg-gradient-to-t from-slate-900 via-slate-900/80 to-slate-900/40"></div>
+        
+        <div className="relative z-10 p-16 max-w-2xl text-white">
+          <div className="w-20 h-20 bg-secondary text-white rounded-2xl flex items-center justify-center mb-8 shadow-premium animate-float">
+              <MapIcon size={36} className="text-white" />
           </div>
-          <h1 className="text-5xl font-heading font-black text-secondary tracking-tighter">
-            MétricaAgro
+          <h1 className="text-5xl font-heading font-black mb-6 leading-tight tracking-tight">
+            GeoFlow
           </h1>
-          <div className="mt-4 flex flex-col items-center gap-1.5">
-            <div className="flex items-center gap-2">
-              <span className="w-1.5 h-1.5 bg-primary rounded-full animate-pulse"></span>
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Agro Performance System</p>
+          <h2 className="text-2xl font-bold text-slate-200 mb-6 border-l-4 border-primary pl-4">
+            Sistema de Gestão para Georreferenciamento de Imóveis Rurais
+          </h2>
+          <p className="text-lg text-slate-300 leading-relaxed mb-8 font-medium">
+            Plataforma desenvolvida para organizar e gerenciar o fluxo completo de trabalho no georreferenciamento rural.
+          </p>
+          
+          <div className="space-y-6">
+            <div className="flex gap-4 items-start group">
+              <div className="mt-1 bg-primary/20 p-2 rounded-lg group-hover:bg-primary/30 transition-colors">
+                <CheckCircle2 size={24} className="text-primary" />
+              </div>
+              <div>
+                <h3 className="text-white font-bold text-lg mb-1">Automação Inteligente</h3>
+                <p className="text-slate-400 text-sm leading-relaxed">
+                  Automatiza a geração de documentos técnicos, personalizados conforme as exigências cartorárias de cada região.
+                </p>
+              </div>
             </div>
-            <p className="text-[9px] font-bold text-primary/60 uppercase tracking-widest">v2.5.0 Professional Edition</p>
+            
+            <div className="flex gap-4 items-start group">
+               <div className="mt-1 bg-primary/20 p-2 rounded-lg group-hover:bg-primary/30 transition-colors">
+                <ShieldCheck size={24} className="text-primary" />
+              </div>
+              <div>
+                <h3 className="text-white font-bold text-lg mb-1">Segurança e Padronização</h3>
+                <p className="text-slate-400 text-sm leading-relaxed">
+                  Garante padronização, eficiência operacional e segurança jurídica em cada etapa do processo.
+                </p>
+              </div>
+            </div>
+          </div>
+          
+          <div className="mt-12 pt-8 border-t border-slate-800 flex items-center justify-between text-xs text-slate-500 font-medium uppercase tracking-widest">
+            <span>© {new Date().getFullYear()} Métrica Agro</span>
+            <span>v2.5.0 Professional</span>
           </div>
         </div>
+      </div>
+
+      {/* Right Side - Login Form */}
+      <div className="w-full lg:w-1/2 flex flex-col items-center justify-center p-4 relative z-10 lg:bg-white/50 lg:backdrop-blur-sm">
+        <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-primary/10 rounded-full blur-[120px] animate-pulse lg:hidden"></div>
+        <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-secondary/10 rounded-full blur-[120px] animate-pulse lg:hidden" style={{ animationDelay: '1s' }}></div>
+
+        <div className="w-full max-w-md p-4 relative z-10 animate-in fade-in slide-in-from-right duration-1000">
+           {/* Mobile Logo */}
+           <div className="text-center mb-10 group cursor-default lg:hidden">
+              <div className="w-20 h-20 bg-secondary text-white rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-premium transition-transform group-hover:scale-110 group-hover:rotate-3 duration-500">
+                <MapIcon size={36} className="text-white animate-float" />
+              </div>
+              <h1 className="text-4xl font-heading font-black text-secondary tracking-tighter">
+                MétricaAgro
+              </h1>
+              <div className="mt-4 flex flex-col items-center gap-1.5">
+                <div className="flex items-center gap-2">
+                  <span className="w-1.5 h-1.5 bg-primary rounded-full animate-pulse"></span>
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Agro Performance System</p>
+                </div>
+              </div>
+           </div>
+           
+           <div className="text-center mb-8 hidden lg:block">
+              <h2 className="text-3xl font-bold text-slate-800 mb-2">Bem-vindo de volta!</h2>
+              <p className="text-slate-500">Acesse sua conta para continuar.</p>
+           </div>
 
         <div className="glass-card rounded-[2.5rem] overflow-hidden border border-white transition-all shadow-premium">
           <div className="flex bg-slate-100 p-1 m-4 rounded-2xl">
@@ -320,9 +384,10 @@ const Auth: React.FC<AuthProps> = ({ onLogin, onProgress }) => {
           </div>
         </div>
 
-        <p className="mt-8 text-center text-[10px] font-medium text-slate-400 uppercase tracking-[0.2em]">
+        <p className="mt-8 text-center text-[10px] font-medium text-slate-400 uppercase tracking-[0.2em] lg:text-slate-500">
           Powered by Métrica Agro • v2.1.0
         </p>
+      </div>
       </div>
     </div>
   );

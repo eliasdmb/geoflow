@@ -19,6 +19,7 @@ import {
   AlertTriangle,
   CalendarClock
 } from 'lucide-react';
+import { formatDate } from '../utils';
 import { Project, Client, RuralProperty, Professional, ProjectStatus, Service, Registry, WorkflowStepId } from '../types';
 
 interface ProjectManagementProps {
@@ -165,6 +166,7 @@ const ProjectManagement: React.FC<ProjectManagementProps> = ({
         </div>
       </div>
 
+      {console.log("ProjectManagement: filteredProjects", filteredProjects)}
       {filteredProjects.length === 0 && (
         <div className="bg-white/70 border border-slate-200/60 rounded-2xl p-8 text-center">
           <p className="text-sm font-bold text-slate-700">Nenhum projeto encontrado</p>
@@ -238,7 +240,7 @@ const ProjectManagement: React.FC<ProjectManagementProps> = ({
                         urgency === 'warning' ? 'bg-amber-50 text-amber-700' : 'bg-primary/5 text-primary'
                       }`}>
                       <CalendarClock size={12} />
-                      <span>Prazo: {new Date(project.deadline).toLocaleDateString()}</span>
+                      <span>Prazo: {formatDate(project.deadline)}</span>
                     </div>
                   )}
                 </div>
