@@ -1308,9 +1308,9 @@ Requerente`;
 
                 </div>
               ) : step.label === 'Requerimento para o Cartório' ? (
-                <div className="flex-1 px-[20mm] py-[10mm]">
+                <div className="flex-1 px-[10mm] py-[5mm]">
                   <div
-                    className="whitespace-pre-wrap text-slate-900 text-[12pt] text-justify leading-relaxed border border-slate-900 p-[15mm] min-h-[200mm] flex flex-col"
+                    className="whitespace-pre-wrap text-slate-900 text-[12pt] text-justify leading-relaxed border border-slate-900 p-[10mm] min-h-[200mm] flex flex-col"
                     style={{
                       boxSizing: 'border-box'
                     }}
