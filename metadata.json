@@ -1,0 +1,7 @@
+{
+  "name": "GeoFlow - MetricaAgro",
+  "description": "A comprehensive workflow management system for rural property georeferencing, featuring rigid step-by-step process control, automated document generation, and professional project tracking.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
