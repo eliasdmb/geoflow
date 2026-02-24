@@ -298,8 +298,9 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({
       return "Carregando dados do documento...";
     }
 
-    const clientAddr = client.address || { street: '', block: '', lot: '', number: '', sector: '', city: '', cep: '' };
-    const formattedClientAddress = `${clientAddr.street || ''}, nº ${clientAddr.number || 'S/N'}, ${clientAddr.city || ''}`;
+    const formattedClientAddress = typeof client.address === 'string' 
+      ? client.address 
+      : `${client.address?.street || ''}, nº ${client.address?.number || 'S/N'}, ${client.address?.city || ''}`;
     const registryMunicipality = selectedRegistry?.municipality || 'Montividiu';
 
     switch (targetStep.label) {
@@ -482,7 +483,7 @@ ${registryMunicipality} - GO, ${today}.`;
 
 Ilustríssimo Sr. Oficial do Registro de Imóveis da Comarca de Rio Verde, Estado de Goiás.
 
-${client.name.toUpperCase()}, ${client.nationality || 'brasileiro'}, ${client.marital_status || 'casado'}, ${client.profession || 'agropecuarista'}, portador do CPF nº. ${client.cpf_cnpj}, proprietário do imóvel rural denominado ${property.name.toUpperCase()}, localizado no município de Rio Verde/GO, devidamente inscrito no Serviço de Registro de Imóveis da comarca de Rio Verde/GO, sob a matrícula nº ${property.registration_number}, cadastrado no INCRA sob o nº ${property.incra_code || '________________'}, abaixo assinado, vem perante V. Sra., requerer a averbação do Georreferenciamento do referido imóvel acima descrito, conforme certificação no SIGEF/INCRA nº ${certNumber}, com a área de ${property.area_ha} ha de minha propriedade e declarar, sob pena de responsabilidade civil e criminal, que não houve alteração das divisas existentes dos imóveis confinantes especificados nas Plantas e memoriais descritivos em anexo e que foram respeitados os direitos dos confrontantes, conforme § 14 do artigo 213, da lei nº 6.015/73.
+${client.name.toUpperCase()}, ${client.nationality || 'brasileiro'}, ${client.marital_status || 'casado'}, ${client.profession || 'agropecuarista'}, portador do CPF nº. ${client.cpf_cnpj}, residente e domiciliado em ${formattedClientAddress}, proprietário do imóvel rural denominado ${property.name.toUpperCase()}, localizado no município de Rio Verde/GO, devidamente inscrito no Serviço de Registro de Imóveis da comarca de Rio Verde/GO, sob a matrícula nº ${property.registration_number}, cadastrado no INCRA sob o nº ${property.incra_code || '________________'}, abaixo assinado, vem perante V. Sra., requerer a averbação do Georreferenciamento do referido imóvel acima descrito, conforme certificação no SIGEF/INCRA nº ${certNumber}, com a área de ${property.area_ha} ha de minha propriedade e declarar, sob pena de responsabilidade civil e criminal, que não houve alteração das divisas existentes dos imóveis confinantes especificados nas Plantas e memoriais descritivos em anexo e que foram respeitados os direitos dos confrontantes, conforme § 14 do artigo 213, da lei nº 6.015/73.
 
 Rio Verde GO, ${today}.
 
@@ -515,7 +516,7 @@ Montividiu GO, ${today}.`;
 
 Ilustríssimo(a) Sr(a). Oficial do ${genericRegistryName}, Comarca de ${genericRegistryCity}/GO.
 
-${client.name.toUpperCase()}, ${client.nationality || 'brasileiro'}, ${client.marital_status || 'casado'}, ${client.profession || 'produtor rural'}, portador do CPF/CNPJ nº ${client.cpf_cnpj}, proprietário do imóvel rural denominado ${property.name.toUpperCase()}, localizado no município de ${property.municipality}/GO, inscrito sob a matrícula nº ${property.registration_number}, cadastrado no INCRA sob o nº ${property.incra_code || '________________'}, vem, respeitosamente, requerer a Vossa Senhoria a averbação do georreferenciamento do imóvel acima descrito, conforme Certificação SIGEF/INCRA nº ${genericCertNumber}, com área de ${property.area_ha} ha.
+${client.name.toUpperCase()}, ${client.nationality || 'brasileiro'}, ${client.marital_status || 'casado'}, ${client.profession || 'produtor rural'}, portador do CPF/CNPJ nº ${client.cpf_cnpj}, residente e domiciliado em ${formattedClientAddress}, proprietário do imóvel rural denominado ${property.name.toUpperCase()}, localizado no município de ${property.municipality}/GO, inscrito sob a matrícula nº ${property.registration_number}, cadastrado no INCRA sob o nº ${property.incra_code || '________________'}, vem, respeitosamente, requerer a Vossa Senhoria a averbação do georreferenciamento do imóvel acima descrito, conforme Certificação SIGEF/INCRA nº ${genericCertNumber}, com área de ${property.area_ha} ha.
 
 Declara, sob as penas da lei, que não houve alteração das divisas reais e efetivas do imóvel registrado, bem como foram respeitados os direitos dos confrontantes especificados nas plantas e memoriais descritivos em anexo.
 
