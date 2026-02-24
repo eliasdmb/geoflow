@@ -990,7 +990,7 @@ Requerente`;
                   {/* PREÂMBULO */}
                   <div className="text-justify text-[11pt]">
                     <p className="indent-8 mb-4">
-                      <strong className="uppercase">Contratante:</strong> {client.name.toUpperCase()}, portador do CPF/CNPJ {client.cpf_cnpj}, residente e domiciliado em {`${client.address?.street || ''}, nº ${client.address?.number || 'S/N'}, ${client.address?.city || ''}`.toUpperCase()}.
+                      <strong className="uppercase">Contratante:</strong> {client.name.toUpperCase()}, portador do CPF/CNPJ {client.cpf_cnpj}, residente e domiciliado em {typeof client.address === 'string' ? client.address.toUpperCase() : `${client.address?.street || ''}, nº ${client.address?.number || 'S/N'}, ${client.address?.city || ''}`.toUpperCase()}.
                     </p>
                     <p className="indent-8">
                       <strong className="uppercase">Contratado:</strong> {professional.name.toUpperCase()}, Engenheiro portador do CREA {professional.crea} e CPF {professional.cpf}, com endereço profissional em {professional.address.toUpperCase()}.
@@ -1071,7 +1071,7 @@ Requerente`;
                       <div className="p-3 grid grid-cols-[auto_1fr] gap-4">
                         <span className="font-bold uppercase">Nome/Razão Social:</span> <span className="uppercase">{client.name}</span>
                         <span className="font-bold uppercase">CPF/CNPJ:</span> <span>{client.cpf_cnpj}</span>
-                        <span className="font-bold uppercase">Endereço:</span> <span className="uppercase">{`${client.address?.street || ''}, ${client.address?.number || 'S/N'}, ${client.address?.city || ''}`}</span>
+                        <span className="font-bold uppercase">Endereço:</span> <span className="uppercase">{typeof client.address === 'string' ? client.address : `${client.address?.street || ''}, ${client.address?.number || 'S/N'}, ${client.address?.city || ''}`}</span>
                         <div className="grid grid-cols-2 gap-4 col-span-2">
                           <div><span className="font-bold uppercase">Telefone:</span> {client.phone}</div>
                           <div><span className="font-bold uppercase">E-mail:</span> {client.email}</div>
@@ -1187,7 +1187,7 @@ Requerente`;
                     <div className="p-2 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-[10pt]">
                       <span className="font-bold">Nome:</span> <span>{client.name}</span>
                       <span className="font-bold">CPF:</span> <span>{client.cpf_cnpj}</span>
-                      <span className="font-bold">Endereço:</span> <span>{`${client.address?.street || ''}, ${client.address?.number || 'S/N'}, ${client.address?.city || ''}`}</span>
+                      <span className="font-bold">Endereço:</span> <span>{typeof client.address === 'string' ? client.address : `${client.address?.street || ''}, ${client.address?.number || 'S/N'}, ${client.address?.city || ''}`}</span>
                     </div>
                   </div>
 

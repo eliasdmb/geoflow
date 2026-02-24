@@ -11,7 +11,9 @@ import {
   AlertTriangle,
   Printer,
   Loader2,
-  Calendar
+  Calendar,
+  Phone,
+  Mail
 } from 'lucide-react';
 import { formatCpfCnpj, isValidCpfOrCnpj } from '../utils';
 
@@ -35,7 +37,11 @@ const ClientList: React.FC<ClientListProps> = ({ clients, onSaveClient, onDelete
   const [formData, setFormData] = useState({
     name: '',
     cpf_cnpj: '',
-    address: ''
+    address: '',
+    marital_status: '',
+    profession: '',
+    email: '',
+    phone: ''
   });
 
   const handleEdit = (client: Client) => {
@@ -49,7 +55,11 @@ const ClientList: React.FC<ClientListProps> = ({ clients, onSaveClient, onDelete
     setFormData({
       name: client.name,
       cpf_cnpj: client.cpf_cnpj,
-      address: displayAddress
+      address: displayAddress,
+      marital_status: client.marital_status || '',
+      profession: client.profession || '',
+      email: client.email || '',
+      phone: client.phone || ''
     });
     setShowModal(true);
   };
@@ -64,7 +74,11 @@ const ClientList: React.FC<ClientListProps> = ({ clients, onSaveClient, onDelete
     onSaveClient({
       name: formData.name,
       cpf_cnpj: formData.cpf_cnpj,
-      address: formData.address
+      address: formData.address,
+      marital_status: formData.marital_status,
+      profession: formData.profession,
+      email: formData.email,
+      phone: formData.phone
     }, editingId || undefined);
 
     setShowModal(false);
@@ -75,7 +89,11 @@ const ClientList: React.FC<ClientListProps> = ({ clients, onSaveClient, onDelete
     setFormData({
       name: '',
       cpf_cnpj: '',
-      address: ''
+      address: '',
+      marital_status: '',
+      profession: '',
+      email: '',
+      phone: ''
     });
     setErrors({});
     setEditingId(null);
@@ -159,6 +177,8 @@ const ClientList: React.FC<ClientListProps> = ({ clients, onSaveClient, onDelete
               <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider mb-4">Proprietário Rural</p>
               <div className="space-y-2 text-[11px] text-slate-600 border-t border-slate-50 pt-4">
                 <div className="flex items-center gap-2"><IdCard size={12} className="text-slate-300" /> <span className="font-mono">{client.cpf_cnpj}</span></div>
+                {client.phone && <div className="flex items-center gap-2"><Phone size={12} className="text-slate-300" /> <span className="font-mono">{client.phone}</span></div>}
+                {client.email && <div className="flex items-center gap-2 truncate"><Mail size={12} className="text-slate-300" /> <span title={client.email}>{client.email}</span></div>}
                 <div className="flex items-center gap-2 truncate text-slate-500"><MapPin size={12} className="text-slate-300" /> {typeof client.address === 'string' ? client.address : 'Ver detalhes'}</div>
               </div>
             </div>
@@ -244,6 +264,39 @@ const ClientList: React.FC<ClientListProps> = ({ clients, onSaveClient, onDelete
                 <label className="block text-[11px] font-bold text-slate-800 uppercase tracking-wider mb-2">CPF *</label>
                 <input required placeholder="Ex: 987.654.321-00" className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40 transition-all font-medium text-slate-700 shadow-sm" value={formData.cpf_cnpj} onChange={e => setFormData({ ...formData, cpf_cnpj: formatCpfCnpj(e.target.value) })} />
                 {errors.cpf_cnpj && <p className="text-[10px] text-rose-500 mt-1">{errors.cpf_cnpj}</p>}
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-800 uppercase tracking-wider mb-2">Estado Civil</label>
+                  <select 
+                    className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40 transition-all font-medium text-slate-700 shadow-sm"
+                    value={formData.marital_status}
+                    onChange={e => setFormData({ ...formData, marital_status: e.target.value })}
+                  >
+                    <option value="">Selecione...</option>
+                    <option value="Solteiro(a)">Solteiro(a)</option>
+                    <option value="Casado(a)">Casado(a)</option>
+                    <option value="Divorciado(a)">Divorciado(a)</option>
+                    <option value="Viúvo(a)">Viúvo(a)</option>
+                    <option value="União Estável">União Estável</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-800 uppercase tracking-wider mb-2">Profissão</label>
+                  <input placeholder="Ex: Agricultor" className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40 transition-all font-medium text-slate-700 shadow-sm" value={formData.profession} onChange={e => setFormData({ ...formData, profession: e.target.value })} />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-800 uppercase tracking-wider mb-2">Email</label>
+                  <input type="email" placeholder="Ex: contato@email.com" className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40 transition-all font-medium text-slate-700 shadow-sm" value={formData.email} onChange={e => setFormData({ ...formData, email: e.target.value })} />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-800 uppercase tracking-wider mb-2">Telefone</label>
+                  <input placeholder="Ex: (62) 99999-9999" className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40 transition-all font-medium text-slate-700 shadow-sm" value={formData.phone} onChange={e => setFormData({ ...formData, phone: e.target.value })} />
+                </div>
               </div>
 
               <div>
