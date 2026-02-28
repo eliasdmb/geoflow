@@ -4,6 +4,7 @@ import { ViewState, Project, Client, RuralProperty, Professional, Service, Regis
 import { WORKFLOW_STEPS_DEFINITION, CAR_WORKFLOW_STEPS_DEFINITION } from '../constants';
 import { supabase } from '../lib/supabase';
 import Dashboard from './Dashboard';
+import { AlertCircle } from 'lucide-react';
 import ProjectManagement from './ProjectManagement';
 import ProjectWorkflow from './ProjectWorkflow';
 import ClientList from './ClientList';
@@ -123,55 +124,87 @@ const AppRouter: React.FC<AppRouterProps> = ({
           onDeleteAccount={(id) => handleDelete('accounts', id)}
         />
       </ProtectedRoute>;
-      case 'PROJECT_DETAILS': return currentProject ? (
-        <ProjectWorkflow
-          project={currentProject}
-          client={clients.find(c => c.id === currentProject.client_id)!}
-          property={properties.find(prop => prop.id === currentProject.property_id)!}
-          professional={professionals.find(prof => prof.id === currentProject.professional_id)!}
-          service={services.find(s => s.id === currentProject.service_id) || services[0]}
-          allProjects={projects}
-          allClients={clients}
-          allProperties={properties}
-          allProfessionals={professionals}
-          allServices={services}
-          allRegistries={registries}
-          certifications={sigefCertifications}
-          budgetItemTemplates={budgetItemTemplates}
-          userName={user?.user_metadata?.name || user?.email?.split('@')[0]}
-          onUpdateStep={(stepDbId, status, notes, docNum) => updateProjectStep(stepDbId, currentProject.id, status, notes, docNum)}
-          onInitSteps={async () => {
-            const uid = userIdRef.current;
-            if (!uid) return false;
-            try {
-              const service = services.find(s => s.id === currentProject.service_id);
-              const isCarGo = service?.name?.toUpperCase().includes('CAR');
+      case 'PROJECT_DETAILS': {
+        if (!currentProject) return <div className="p-8 text-center text-slate-500 italic">Carregando detalhes...</div>;
 
-              let stepsToCreate = WORKFLOW_STEPS_DEFINITION;
-              if (isCarGo) {
-                stepsToCreate = CAR_WORKFLOW_STEPS_DEFINITION;
-              }
+        const client = clients.find(c => c.id === currentProject.client_id);
+        const property = properties.find(prop => prop.id === currentProject.property_id);
+        const professional = professionals.find(prof => prof.id === currentProject.professional_id);
+        const service = services.find(s => s.id === currentProject.service_id) || (services.length > 0 ? services[0] : undefined);
 
-              await supabase.from('project_steps').delete().eq('project_id', currentProject.id);
-              const steps = stepsToCreate.map((s, i) => ({
-                project_id: currentProject.id,
-                step_id: s.id,
-                label: s.label,
-                has_document: s.hasDocument,
-                status: i === 0 ? ProjectStatus.IN_PROGRESS : ProjectStatus.NOT_STARTED,
-                user_id: uid
-              }));
+        const isCarGo = service?.name?.toUpperCase().includes('CAR');
 
-              await supabase.from('project_steps').insert(steps);
-              fetchInitialData(uid);
-              return true;
-            } catch (e) { return false; }
-          }}
-          onBack={() => setCurrentView('PROJECTS')}
-          isAdmin={role === 'admin'}
-          onCreateTransaction={(t) => handleUpsert('financial_transactions', t, fetchInitialData)}
-        />
-      ) : <div className="p-8 text-center text-slate-500 italic">Carregando detalhes...</div>;
+        // Check for missing core data to prevent rendering crashes
+        if (!client || !property || !service) {
+          return (
+            <div className="p-12 text-center bg-white rounded-3xl border border-slate-100 shadow-sm animate-in fade-in duration-500">
+              <div className="w-16 h-16 bg-amber-50 text-amber-500 rounded-2xl flex items-center justify-center mx-auto mb-6">
+                <AlertCircle size={32} />
+              </div>
+              <h3 className="text-lg font-bold text-slate-800">Dados incompletos</h3>
+              <p className="text-sm text-slate-500 mt-2 max-w-xs mx-auto">
+                Não foi possível encontrar todas as informações obrigatórias vinculadas a este projeto (Cliente, Imóvel ou Serviço).
+              </p>
+              <button
+                onClick={() => setCurrentView('PROJECTS')}
+                className="mt-8 px-6 py-2 bg-primary text-white rounded-xl font-bold text-xs uppercase tracking-widest"
+              >
+                Voltar para Lista
+              </button>
+            </div>
+          );
+        }
+
+        // Professional is now optional for some workflows or initial states
+        return (
+          <ProjectWorkflow
+            project={currentProject}
+            client={client}
+            property={property}
+            professional={professional}
+            service={service}
+            allProjects={projects}
+            allClients={clients}
+            allProperties={properties}
+            allProfessionals={professionals}
+            allServices={services}
+            allRegistries={registries}
+            certifications={sigefCertifications}
+            budgetItemTemplates={budgetItemTemplates}
+            userName={user?.user_metadata?.name || user?.email?.split('@')[0]}
+            onUpdateStep={(stepDbId, status, notes, docNum) => updateProjectStep(stepDbId, currentProject.id, status, notes, docNum)}
+            onInitSteps={async () => {
+              const uid = userIdRef.current;
+              if (!uid) return false;
+              try {
+                const isCarGo = service?.name?.toUpperCase().includes('CAR');
+
+                let stepsToCreate = WORKFLOW_STEPS_DEFINITION;
+                if (isCarGo) {
+                  stepsToCreate = CAR_WORKFLOW_STEPS_DEFINITION;
+                }
+
+                await supabase.from('project_steps').delete().eq('project_id', currentProject.id);
+                const steps = stepsToCreate.map((s, i) => ({
+                  project_id: currentProject.id,
+                  step_id: s.id,
+                  label: s.label,
+                  has_document: s.hasDocument,
+                  status: i === 0 ? ProjectStatus.IN_PROGRESS : ProjectStatus.NOT_STARTED,
+                  user_id: uid
+                }));
+
+                await supabase.from('project_steps').insert(steps);
+                fetchInitialData(uid);
+                return true;
+              } catch (e) { return false; }
+            }}
+            onBack={() => setCurrentView('PROJECTS')}
+            isAdmin={role === 'admin'}
+            onCreateTransaction={(t) => handleUpsert('financial_transactions', t, fetchInitialData)}
+          />
+        );
+      }
       case 'CLIENTS': return <ClientList clients={clients} onSaveClient={(c, id) => handleUpsert('clients', c, fetchInitialData, id)} onDeleteClient={(id) => handleDelete('clients', id)} />;
       case 'PROPERTIES': return <PropertyList properties={properties} clients={clients} onSaveProperty={(p, id) => handleUpsert('properties', p, fetchInitialData, id)} onDeleteProperty={(id) => handleDelete('properties', id)} />;
       case 'PROFESSIONALS': return <ProfessionalList professionals={professionals} onSaveProfessional={(p, id) => handleUpsert('professionals', p, fetchInitialData, id)} onDeleteProfessional={(id) => handleDelete('professionals', id)} />;

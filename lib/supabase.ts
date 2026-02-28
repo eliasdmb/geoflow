@@ -1,6 +1,8 @@
 import { createClient } from '@supabase/supabase-js';
 
+// @ts-ignore
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+// @ts-ignore
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
@@ -19,7 +21,7 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     headers: { 'x-application-name': 'geoflow-metrica-agro' },
     // Aumenta a resiliência a falhas temporárias de rede
     // Fix: Using explicit parameters (input, init) to satisfy TypeScript requirements for non-rest parameter functions
-    fetch: (input, init) => {
+    fetch: (input: RequestInfo | URL, init?: RequestInit) => {
       return fetch(input, init).catch(err => {
         if (err.message.includes('Failed to fetch')) {
           console.warn("Supabase Fetch Interrompido - Verificando status do servidor...");

@@ -61,6 +61,8 @@ const Dashboard: React.FC<DashboardProps> = ({ projects, appointments, clients, 
     return steps[steps.length - 1].status !== ProjectStatus.COMPLETED;
   }).length;
 
+
+
   const getUrgentDeadlines = () => {
     return projects.filter(p => {
       if (!p.deadline) return false;
@@ -144,6 +146,28 @@ const Dashboard: React.FC<DashboardProps> = ({ projects, appointments, clients, 
     .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
     .slice(0, 5);
 
+  const initialRecentPoints: { project: Project; client?: Client; points: { m: string, p: string, v: string }; date: string }[] = [];
+
+  const recentPoints = projects.reduce((acc, p) => {
+    const pointStep = p.steps?.find(s => s.step_id === WorkflowStepId.POINT_CONTROL && s.notes);
+    if (pointStep && pointStep.notes) {
+      try {
+        const points = JSON.parse(pointStep.notes);
+        if (typeof points === 'object' && points !== null && (points.m || points.p || points.v)) {
+          acc.push({
+            project: p,
+            client: clients.find(c => c.id === p.client_id),
+            points,
+            date: pointStep.completed_at || p.updated_at
+          });
+        }
+      } catch (e) { }
+    }
+    return acc;
+  }, initialRecentPoints)
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+    .slice(0, 5);
+
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-1000">
       <div className="glass-card p-6 sm:p-10 rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-6 relative overflow-hidden group border border-border-light">
@@ -211,7 +235,10 @@ const Dashboard: React.FC<DashboardProps> = ({ projects, appointments, clients, 
                     <div key={p.id} className="p-5 flex flex-col sm:flex-row sm:items-center justify-between hover:bg-slate-50 transition-all cursor-pointer group gap-4" onClick={() => onProjectSelect(p.id)}>
                       <div className="flex items-center gap-5">
                         <div className={`w-2 h-10 rounded-full shrink-0 transition-transform group-hover:scale-y-110 ${days < 0 ? 'bg-slate-900 shadow-[0_0_12px_rgba(15,23,42,0.3)]' : days <= 3 ? 'bg-rose-500 shadow-[0_0_12px_rgba(244,63,94,0.3)]' : 'bg-amber-500 shadow-[0_0_12px_rgba(245,158,11,0.3)]'}`}></div>
-                        <div className="overflow-hidden">
+                        <div className="overflow-hidden flex flex-col gap-1">
+                          <span className="text-[9px] font-black text-primary uppercase tracking-widest bg-primary/5 px-2 py-0.5 rounded border border-primary/10 w-fit">
+                            Projeto #{p.project_number || '---'}
+                          </span>
                           <p className="text-base font-heading font-semibold text-slate-main truncate group-hover:text-primary transition-colors tracking-tight">{p.title}</p>
                           <p className="text-[10px] text-slate-muted font-medium uppercase tracking-widest truncate mt-0.5">
                             <span className="text-slate-main">{formatDate(p.deadline)}</span> • {p.steps?.[p.current_step_index]?.label}
@@ -321,6 +348,7 @@ const Dashboard: React.FC<DashboardProps> = ({ projects, appointments, clients, 
           </div>
 
           {/* Financeiro de Hoje (Pagar/Receber) */}
+          {/* FINANCEIRO (A Pagar/A Receber) MANTIDO */}
           <div className="glass-card rounded-3xl overflow-hidden shadow-premium border-t-8 border-primary">
             <div className="p-5 flex items-center justify-between border-b border-border-light">
               <h3 className="text-[10px] font-semibold text-slate-main uppercase tracking-[0.2em] flex items-center gap-3">
@@ -381,6 +409,56 @@ const Dashboard: React.FC<DashboardProps> = ({ projects, appointments, clients, 
                     <DollarSign size={28} />
                   </div>
                   <p className="text-[10px] text-slate-muted font-medium uppercase tracking-[0.25em] italic">Transações Liquidadas</p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* ÚLTIMOS PONTOS UTILIZADOS */}
+          <div className="glass-card rounded-3xl overflow-hidden shadow-premium">
+            <div className="p-5 flex items-center justify-between border-b border-border-light bg-slate-50/50">
+              <h3 className="text-[10px] font-semibold text-slate-main uppercase tracking-[0.2em] flex items-center gap-3">
+                <MapIcon size={18} className="text-primary" /> Últimos Pontos Utilizados
+              </h3>
+            </div>
+            <div className="divide-y divide-border-light max-h-[350px] overflow-y-auto custom-scrollbar">
+              {recentPoints.length > 0 ? (
+                recentPoints.map((pt, i) => (
+                  <div key={i} className="p-5 hover:bg-slate-50 transition-all">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-2">
+                        <div className="w-6 h-6 rounded-full bg-slate-100 flex items-center justify-center text-slate-600 shadow-sm border border-slate-200">
+                          <User size={12} />
+                        </div>
+                        <span className="text-xs font-semibold text-slate-800 tracking-tight">{pt.client?.name || 'Produtor Sem Nome'}</span>
+                      </div>
+                      <span className="text-[10px] font-medium text-slate-500 bg-slate-100 px-2 py-1 rounded border border-slate-200 uppercase tracking-widest flex items-center gap-1.5">
+                        <CalendarClock size={12} className="text-slate-400" /> {formatDate(pt.date)}
+                      </span>
+                    </div>
+
+                    <div className="flex gap-2 w-full mt-2">
+                      <div className="flex-1 flex flex-col items-center p-2 rounded-xl bg-blue-50/50 border border-blue-100/50 min-w-0">
+                        <span className="text-[9px] font-black text-blue-400 uppercase tracking-widest mb-1 shadow-sm">Ponto M</span>
+                        <span className="text-[11px] font-semibold text-blue-600 w-full text-center break-all leading-tight" title={pt.points.m}>{pt.points.m || '-'}</span>
+                      </div>
+                      <div className="flex-1 flex flex-col items-center p-2 rounded-xl bg-emerald-50/50 border border-emerald-100/50 min-w-0">
+                        <span className="text-[9px] font-black text-emerald-400 uppercase tracking-widest mb-1 shadow-sm">Ponto P</span>
+                        <span className="text-[11px] font-semibold text-emerald-600 w-full text-center break-all leading-tight" title={pt.points.p}>{pt.points.p || '-'}</span>
+                      </div>
+                      <div className="flex-1 flex flex-col items-center p-2 rounded-xl bg-amber-50/50 border border-amber-100/50 min-w-0">
+                        <span className="text-[9px] font-black text-amber-400 uppercase tracking-widest mb-1 shadow-sm">Ponto V</span>
+                        <span className="text-[11px] font-semibold text-amber-600 w-full text-center break-all leading-tight" title={pt.points.v}>{pt.points.v || '-'}</span>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="p-10 text-center">
+                  <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-4 border border-border-light">
+                    <MapIcon size={28} className="text-slate-300" />
+                  </div>
+                  <p className="text-[10px] text-slate-muted font-medium uppercase tracking-[0.25em] italic">Nenhum ponto registrado</p>
                 </div>
               )}
             </div>

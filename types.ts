@@ -19,7 +19,8 @@ export enum WorkflowStepId {
   GEO_REPORT = 7,
   CARTORY_REQ = 8,
   CRI_REGISTRATION = 9,
-  RECEIPT = 10
+  POINT_CONTROL = 10,
+  RECEIPT = 11
 }
 
 export enum TransactionType {
@@ -177,6 +178,12 @@ export interface WorkflowStep {
   document_number?: string;
 }
 
+export interface PointControlData {
+  m: string;
+  p: string;
+  v: string;
+}
+
 export interface Project {
   id: string;
   user_id: string;
@@ -188,6 +195,7 @@ export interface Project {
   certification_number?: string;
   certification_date?: string;
   art_number?: string;
+  project_number?: string;
   title: string;
   current_step_index: number;
   steps?: WorkflowStep[];

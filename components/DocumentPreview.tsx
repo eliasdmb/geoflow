@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   X,
   FileText,
@@ -80,7 +80,7 @@ interface DocumentPreviewProps {
   step: WorkflowStep;
   client: Client;
   property: RuralProperty;
-  professional: Professional;
+  professional?: Professional;
   service: Service;
   allProjects: Project[];
   allClients: Client[];
@@ -166,18 +166,41 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({
   onReceiptReceived
 }) => {
   const docRef = useRef<HTMLDivElement>(null);
+  const headerRef = useRef<HTMLDivElement>(null); // Novo ref para o cabeçalho
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationProgress, setGenerationProgress] = useState(0);
   const [generationMessage, setGenerationMessage] = useState('');
+  const [showHeader, setShowHeader] = useState(true); // Controla a visibilidade do cabeçalho na visualização
 
   const LOGO_URL = 'https://lh3.googleusercontent.com/d/1xQfCG7HAQ6_LcrMn_1cINu5KSumlHdxT=s2000';
 
   const todayDate = new Date();
   const [customDate, setCustomDate] = useState(todayDate.toISOString().split('T')[0]);
+
+  const getFullDate = (dateStr: string, city: string) => {
+    const months = [
+      "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
+      "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"
+    ];
+    const date = new Date(dateStr + 'T12:00:00');
+    const day = date.getDate();
+    const month = months[date.getMonth()];
+    const year = date.getFullYear();
+    return `${city} Goiás, ${day} de ${month} de ${year}.`;
+  };
+
   const today = new Date(customDate + 'T12:00:00').toLocaleDateString('pt-BR');
   const targetYear = new Date(customDate).getFullYear();
 
-  const [docNumber, setDocNumber] = useState(step.document_number || `${Math.floor(Math.random() * 9999).toString().padStart(4, '0')}/${targetYear}`);
+  // Use the persisted project_number as the document number
+  const autoDocNumber = project.project_number || '';
+
+  const [docNumber, setDocNumber] = useState(step.document_number || autoDocNumber);
+
+  // Sincronizar docNumber se o número automático mudar ou se o projeto/etapa mudar
+  useEffect(() => {
+    setDocNumber(step.document_number || autoDocNumber);
+  }, [autoDocNumber, step.document_number, project.id, step.id]);
 
   // Find the budget step to load/save items from
   const budgetStep = project.steps?.find(s => s.step_id === WorkflowStepId.BUDGET);
@@ -225,6 +248,16 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({
 
   const [showEditor, setShowEditor] = useState(false);
   const [isSavingValues, setIsSavingValues] = useState(false);
+
+  const displayProfessional = professional || {
+    name: 'NÃO ATRIBUÍDO',
+    crea: '---',
+    cpf: '---',
+    address: '---',
+    phone: '---',
+    email: '---',
+    incra_code: '---'
+  };
 
   const isDocumentationStep = step.step_id === WorkflowStepId.DOCUMENTATION;
   const isCarService = service?.name?.toUpperCase().includes('CAR');
@@ -283,31 +316,43 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({
     return `${nextSeq}/${currentYear}`;
   };
 
-  // Auto-assign number if missing for this step
+  // Auto-assign number: use project_number if available, otherwise fallback to computed
   useEffect(() => {
-    if (!step?.document_number) {
-      setDocNumber(computeNextDocNumber(step.label));
-    } else {
+    if (step?.document_number) {
       setDocNumber(step.document_number);
+    } else if (autoDocNumber) {
+      setDocNumber(autoDocNumber);
+    } else {
+      setDocNumber(computeNextDocNumber(step.label));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [step?.id, step?.label, step?.document_number]);
+  }, [step?.id, step?.label, step?.document_number, autoDocNumber]);
+
+  const getDocPrefix = (label: string): string => {
+    const l = label.toLowerCase();
+    if (l.includes('ordem de serviço')) return 'O.S. nº';
+    if (l.includes('laudo')) return 'Laudo nº';
+    if (l.includes('contrato')) return 'Contrato nº';
+    if (l.includes('orçamento')) return 'Orçamento nº';
+    if (l.includes('recibo')) return 'Recibo nº';
+    return 'Doc. nº';
+  };
 
   const getPlainTextContent = (targetStep: WorkflowStep) => {
-    if (!client || !property || !professional) {
+    if (!client || !property || (!isCarService && !professional)) {
       return "Carregando dados do documento...";
     }
 
-    const formattedClientAddress = typeof client.address === 'string' 
-      ? client.address 
+    const formattedClientAddress = typeof client.address === 'string'
+      ? client.address
       : `${client.address?.street || ''}, nº ${client.address?.number || 'S/N'}, ${client.address?.city || ''}`;
     const registryMunicipality = selectedRegistry?.municipality || 'Montividiu';
 
     switch (targetStep.label) {
       case 'Contrato de Trabalho':
+        if (!professional) return "Profissional não atribuído para este contrato.";
         return `CONTRATO DE PRESTAÇÃO DE SERVIÇOS DE GEORREFERENCIAMENTO DE IMÓVEL RURAL
 
-Contrato nº ${project.id || 'S/N'}
 Pelo presente instrumento particular, as partes abaixo identificadas:
 
 CONTRATANTE:
@@ -318,49 +363,36 @@ Telefone: ${client.phone}
 E-mail: ${client.email}
 
 CONTRATADO:
-Nome: ${professional.name.toUpperCase()}
-CPF/CNPJ: ${professional.cpf}
-CREA/ART: ${professional.crea}
-Endereço: ${professional.address}
-Telefone: ${professional.phone}
-E-mail: ${professional.email}
+Nome: ${displayProfessional.name.toUpperCase()}
+CPF/CNPJ: ${displayProfessional.cpf}
+CREA/ART: ${displayProfessional.crea}
+Endereço: ${displayProfessional.address}
+Telefone: ${displayProfessional.phone}
+E-mail: ${displayProfessional.email}
 
 CLÁUSULA PRIMEIRA – OBJETO
-O presente contrato tem como objeto a prestação dos serviços técnicos de Levantamento Planialtimétrico Georreferenciado e Elaboração de Peças Técnicas para fins de Certificação no imóvel rural de propriedade do CONTRATANTE, conforme exigências da Lei nº 10.267/2001, do Decreto nº 4.449/2002, e das normas do SIGEF/INCRA.
+O presente contrato tem como objeto a prestação dos serviços técnicos de Engenharia de Agrimensura, especificamente o Georreferenciamento do imóvel rural denominado "${property.name.toUpperCase()}", com área aproximada de ${property.area_ha} hectares, registrado sob a matrícula ${property.registration_number} do ${selectedRegistry?.name || 'CRI competente'}.
 
-CLÁUSULA SEGUNDA – DESCRIÇÃO DO IMÓVEL
-O imóvel a ser georreferenciado está localizado no Município de ${property.municipality}, Estado de GO, com área de ${property.area_ha} hectares, denominado ${property.name.toUpperCase()}, registrado sob a matrícula nº ${property.registration_number}, no Cartório de Registro de Imóveis de ${property.comarca || property.municipality}.
+CLÁUSULA SEGUNDA – DAS ETAPAS DO SERVIÇO
+O trabalho será desenvolvido seguindo rigorosamente as Normas Técnicas do INCRA e legislação vigente, compreendendo as seguintes etapas:
+${service.items && service.items.length > 0 ? service.items.map((item, index) => `${index + 1}. ${item}`).join('\n') : `1. Levantamento planimétrico com tecnologia GNSS;
+2. Processamento e ajustamento de dados;
+3. Elaboração de plantas e memoriais descritivos;
+4. Certificação junto ao SIGEF/INCRA.`}
 
-CLÁUSULA TERCEIRA – OBRIGAÇÕES DO CONTRADO
-O CONTRATADO obriga-se a:
-${service.items && service.items.length > 0 ? service.items.map((item, index) => `${index + 1}. ${item}`).join('\n') : `1. Executar o levantamento planialtimétrico georreferenciado do imóvel, conforme exigências técnicas do INCRA/SIGEF;
-2. Elaborar planta e memorial descritivo do imóvel com base nas coordenadas geodésicas obtidas;
-3. Obter as anuências dos confrontantes.
-4. Providenciar o envio dos dados ao sistema SIGEF para certificação;
-5. Fornecer ao CONTRATANTE cópia digital e impressa dos documentos gerados.`}
+CLÁUSULA TERCEIRA – DOS HONORÁRIOS E PAGAMENTO
+Pelos serviços descritos na Cláusula Primeira, o CONTRATANTE pagará ao CONTRATADO a importância total de:
+R$ ${totalFinal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} (${numeroPorExtenso(totalFinal)})
 
-CLÁUSULA QUARTA – OBRIGAÇÕES DO CONTRATANTE
-O CONTRATANTE obriga-se a:
-1. Fornecer os documentos necessários (matrícula, CPF/CNPJ, documentos do imóvel, etc.);
-2. Permitir o acesso do CONTRATADO à propriedade para realização dos levantamentos de campo;
-3. Realizar os pagamentos nos prazos estabelecidos neste contrato.
+CLÁUSULA QUARTA – DOS PRAZOS
+O prazo estimado para conclusão dos trabalhos de campo e escritório é de 60 (sessenta) dias, contados a partir da data de assinatura deste contrato e da confirmação de acesso ao imóvel, ressalvados atrasos decorrentes de condições climáticas adversas, impedimentos de acesso ou morosidade de órgãos públicos.
 
-CLÁUSULA QUINTA – VALOR E CONDIÇÕES DE PAGAMENTO
-Pelos serviços contratados, o CONTRATANTE pagará ao CONTRATADO a quantia de R$ ${totalFinal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} (${numeroPorExtenso(totalFinal)}), a serem pagos imediatamente após a entrega dos documentos para registro no CRI do imóvel rural.
+CLÁUSULA SEXTA – DO FORO
+Fica eleito o foro da comarca de ${selectedRegistry?.municipality || 'Situação do Imóvel'} - GO para dirimir quaisquer dúvidas oriundas deste contrato, com renúncia expressa a qualquer outro, por mais privilegiado que seja.
 
-CLÁUSULA SEXTA – PRAZO DE EXECUÇÃO
-O prazo estimado para conclusão dos serviços é de 60 (sessenta) dias, contados a partir da data de assinatura deste contrato e entrega de todos os documentos necessários.
+E por estarem assim justos e contratados, assinam o presente instrumento em 02 (duas) vias de igual teor e forma, na presença de duas testemunhas.
 
-CLÁUSULA SÉTIMA – RESPONSABILIDADE TÉCNICA
-O serviço será executado sob responsabilidade técnica do profissional habilitado, com emissão da Anotação de Responsabilidade Técnica (ART) junto ao CREA/CONFEA.
-
-CLÁUSULA OITAVA – RESCISÃO
-O presente contrato poderá ser rescindido por qualquer das partes, mediante notificação por escrito com antecedência mínima de 10 (dez) dias. Em caso de rescisão, o CONTRATADO terá direito ao recebimento proporcional dos serviços já executados.
-
-CLÁUSULA NONA – CONDIÇÕES GERAIS
-As partes elegem o foro da Comarca de ${property.comarca || property.municipality}, para dirimir eventuais dúvidas ou controvérsias oriundas deste contrato, renunciando a qualquer outro, por mais privilegiado que seja.
-
-${clientAddr.city || 'Cidade'}, ${today}
+${(typeof client.address === 'object' ? client.address?.city : undefined) || 'Cidade'}, ${today}
 
 CONTRATANTE:
 
@@ -381,9 +413,7 @@ CPF:`;
 3. Elaboração de Plantas e Memoriais
 4. Certificação junto ao SIGEF/INCRA`; // Fallback to original if no service items
 
-        return `ORDEM DE SERVIÇO Nº ${docNumber}
-
-CLIENTE: ${client.name.toUpperCase()}
+        return `CLIENTE: ${client.name.toUpperCase()}
 CPF/CNPJ: ${client.cpf_cnpj}
 ENDEREÇO: ${formattedClientAddress}
 
@@ -396,8 +426,8 @@ DESCRIÇÃO DOS SERVIÇOS:
 ${serviceItemsList}
 
 RESPONSÁVEL TÉCNICO:
-${professional.name.toUpperCase()}
-CREA: ${professional.crea}
+${displayProfessional.name.toUpperCase()}
+CREA: ${displayProfessional.crea}
 ART nº: ${selectedCertification?.art_number || project.art_number || ''}
 
 PRAZOS:
@@ -409,15 +439,12 @@ Serviço executado conforme Normas Técnicas do INCRA (3ª Edição).`;
 
       case 'Laudo Técnico':
       case 'Laudo de Georreferenciamento':
-        return `LAUDO TÉCNICO DE GEORREFERENCIAMENTO DE IMÓVEL RURAL
-
-
-
-1.\tIDENTIFICAÇÃO DO PROFISSIONAL RESPONSÁVEL
-Nome:\t${professional.name}
-CREA:\t${professional.crea}\tCPF:\t${professional.cpf}
-Edereço:\t${professional.address}
-Telefone:\t${professional.phone}\te-mail:\t${professional.email}
+        if (!professional) return "Profissional não atribuído para este laudo.";
+        return `1.\tIDENTIFICAÇÃO DO PROFISSIONAL RESPONSÁVEL
+Nome:\t${displayProfessional.name}
+CREA:\t${displayProfessional.crea}\tCPF:\t${displayProfessional.cpf}
+Edereço:\t${displayProfessional.address}
+Telefone:\t${displayProfessional.phone}\te-mail:\t${displayProfessional.email}
 
 2.\tIDENTIFICAÇÃO DO IMÓVEL\t
 Propriedade:\t${property.name}\t
@@ -455,42 +482,31 @@ ${property.municipality}, ${today}
 
 
 
-${professional.name}
+${displayProfessional.name}
 Engenheiro Agrônomo
- CREA: ${professional.crea}
-CPF: ${professional.cpf}     
+ CREA: ${displayProfessional.crea}
+CPF: ${displayProfessional.cpf}     
 ART Nº ${selectedCertification?.art_number || project.art_number || ''}
-Cód. Credenciado: ${professional.incra_code || ''}`;
+Cód. Credenciado: ${displayProfessional.incra_code || ''}`;
 
       case 'RECIBO':
         const receiptTextPlain = isCarService
           ? `Recebemos de ${client.name.toUpperCase()}, a importância de R$ ${totalFinal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} (${numeroPorExtenso(totalFinal)}), referente à quitação parcial/total dos serviços técnicos de CAR do imóvel ${property.name.toUpperCase()}.`
           : `Recebi de ${client.name.toUpperCase()}, CPF/CNPJ ${client.cpf_cnpj}, a importância de R$ ${totalFinal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}, (${numeroPorExtenso(totalFinal)}), referente à prestação de serviços técnicos de georreferenciamento do imóvel rural denominado ${property.name.toUpperCase()}, situado no município de ${property.municipality}/${property.uf || 'GO'}.`;
 
-        return `RECIBO
- 
-${receiptTextPlain}
+        return `${receiptTextPlain}
  
 ${registryMunicipality} - GO, ${today}.`;
 
       case 'Orçamento':
-        return `ORÇAMENTO DE PRESTAÇÃO DE SERVIÇOS TÉCNICOS\n\nResumo: Execução de Georreferenciamento para o imóvel ${property.name}.\nValor Total: R$ ${totalFinal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n\nEste documento detalhado está disponível na visualização formatada.`;
+        return `Resumo: Execução de Georreferenciamento para o imóvel ${property.name}.\nValor Total: R$ ${totalFinal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n\nEste documento detalhado está disponível na visualização formatada.`;
 
       case 'Requerimento para o Cartório':
         if (selectedRegistry?.cns === '02.612-0') {
           const certNumber = selectedCertification?.cert_number || project.certification_number || '______________';
-          return `REQUERIMENTO PARA AVERBAÇÃO
+          return `Ilustríssimo Sr. Oficial do Registro de Imóveis da Comarca de Rio Verde, Estado de Goiás.
 
-Ilustríssimo Sr. Oficial do Registro de Imóveis da Comarca de Rio Verde, Estado de Goiás.
-
-${client.name.toUpperCase()}, ${client.nationality || 'brasileiro'}, ${client.marital_status || 'casado'}, ${client.profession || 'agropecuarista'}, portador do CPF nº. ${client.cpf_cnpj}, residente e domiciliado em ${formattedClientAddress}, proprietário do imóvel rural denominado ${property.name.toUpperCase()}, localizado no município de Rio Verde/GO, devidamente inscrito no Serviço de Registro de Imóveis da comarca de Rio Verde/GO, sob a matrícula nº ${property.registration_number}, cadastrado no INCRA sob o nº ${property.incra_code || '________________'}, abaixo assinado, vem perante V. Sra., requerer a averbação do Georreferenciamento do referido imóvel acima descrito, conforme certificação no SIGEF/INCRA nº ${certNumber}, com a área de ${property.area_ha} ha de minha propriedade e declarar, sob pena de responsabilidade civil e criminal, que não houve alteração das divisas existentes dos imóveis confinantes especificados nas Plantas e memoriais descritivos em anexo e que foram respeitados os direitos dos confrontantes, conforme § 14 do artigo 213, da lei nº 6.015/73.
-
-Rio Verde GO, ${today}.
-
-
-${client.name.toUpperCase()}
-CPF: ${client.cpf_cnpj}
-Requerente`;
+${client.name.toUpperCase()}, ${client.nationality || 'brasileiro'}, ${client.marital_status || 'casado'}, ${client.profession || 'agropecuarista'}, portador do CPF nº. ${client.cpf_cnpj}, residente e domiciliado em ${formattedClientAddress}, proprietário do imóvel rural denominado ${property.name.toUpperCase()}, localizado no município de Rio Verde/GO, devidamente inscrito no Serviço de Registro de Imóveis da comarca de Rio Verde/GO, sob a matrícula nº ${property.registration_number}, cadastrado no INCRA sob o nº ${property.incra_code || '________________'}, abaixo assinado, vem perante V. Sra., requerer a averbação do Georreferenciamento do referido imóvel acima descrito, conforme certificação no SIGEF/INCRA nº ${certNumber}, com a área de ${property.area_ha} ha de minha propriedade e declarar, sob pena de responsabilidade civil e criminal, que não houve alteração das divisas existentes dos imóveis confinantes especificados nas Plantas e memoriais descritivos em anexo e que foram respeitados os direitos dos confrontantes, conforme § 14 do artigo 213, da lei nº 6.015/73.`;
         }
 
         if (selectedRegistry?.cns === '02.648-4') {
@@ -505,16 +521,12 @@ Data da Certificação: ${formatDate(selectedCertification?.cert_date || project
 
 
 Nestes Termos,
-Pede Deferimento.
-
-Montividiu GO, ${today}.`;
+Pede Deferimento.`;
         }
         const genericRegistryName = selectedRegistry?.name || 'Registro de Imóveis competente';
         const genericRegistryCity = selectedRegistry?.municipality || property.municipality || '__________';
         const genericCertNumber = selectedCertification?.cert_number || project.certification_number || '______________';
-        return `REQUERIMENTO PARA AVERBAÇÃO
-
-Ilustríssimo(a) Sr(a). Oficial do ${genericRegistryName}, Comarca de ${genericRegistryCity}/GO.
+        return `Ilustríssimo(a) Sr(a). Oficial do ${genericRegistryName}, Comarca de ${genericRegistryCity}/GO.
 
 ${client.name.toUpperCase()}, ${client.nationality || 'brasileiro'}, ${client.marital_status || 'casado'}, ${client.profession || 'produtor rural'}, portador do CPF/CNPJ nº ${client.cpf_cnpj}, residente e domiciliado em ${formattedClientAddress}, proprietário do imóvel rural denominado ${property.name.toUpperCase()}, localizado no município de ${property.municipality}/GO, inscrito sob a matrícula nº ${property.registration_number}, cadastrado no INCRA sob o nº ${property.incra_code || '________________'}, vem, respeitosamente, requerer a Vossa Senhoria a averbação do georreferenciamento do imóvel acima descrito, conforme Certificação SIGEF/INCRA nº ${genericCertNumber}, com área de ${property.area_ha} ha.
 
@@ -523,15 +535,14 @@ Declara, sob as penas da lei, que não houve alteração das divisas reais e efe
 Nestes Termos,
 Pede Deferimento.
 
-${genericRegistryCity} - GO, ${today}.
-
 
 ${client.name.toUpperCase()}
 CPF/CNPJ: ${client.cpf_cnpj}
 Requerente`;
 
-      case 'Capa do Processo':
-        return `CAPA DO PROCESSO\n\nCLIENTE: ${client.name.toUpperCase()}\nIMÓVEL: ${property.name.toUpperCase()}\n\nItens do Processo:\n${(() => {
+      case 'Documentação (Checklist)':
+        const checklistArt = selectedCertification?.art_number || project?.art_number || 'N/A';
+        return `DOCUMENTAÇÃO (CHECKLIST)\n\nCLIENTE: ${client.name.toUpperCase()}\nIMÓVEL: ${property.name.toUpperCase()}\nART: ${checklistArt}\n\nItens do Processo:\n${(() => {
           try {
             const checklistState = step.notes ? JSON.parse(step.notes) : {};
             const registry = allRegistries?.find(r => r.id === project?.registry_id);
@@ -554,7 +565,7 @@ Requerente`;
           }`;
 
       default:
-        return `Documento de ${targetStep.label} para o projeto ${project?.title || 'Metrica Agro'}.\n\nCLIENTE: ${client.name.toUpperCase()}\nIMÓVEL: ${property.name.toUpperCase()}\nÁREA: ${property.area_ha} ha\nREGISTRO: ${property.registration_number}\n\nResponsável Técnico: ${professional.name}\nCREA: ${professional.crea}\nData: ${today}`;
+        return `Documento de ${targetStep.label} para o projeto ${project?.title || 'Metrica Agro'}.\n\nCLIENTE: ${client.name.toUpperCase()}\nIMÓVEL: ${property.name.toUpperCase()}\nÁREA: ${property.area_ha} ha\nREGISTRO: ${property.registration_number}\n\nResponsável Técnico: ${displayProfessional.name}\nCREA: ${displayProfessional.crea}\nData: ${today}`;
     }
   };
 
@@ -568,13 +579,28 @@ Requerente`;
     if (!docRef.current) return;
     const html2pdfLib = (window as any).html2pdf;
     if (!html2pdfLib) {
-      alert("Sistema de PDF indisponível. Recarregue a página.");
+      console.error("PDF Error: html2pdf not found on window object");
+      alert("Erro: Biblioteca de PDF (html2pdf) não carregada. Por favor, aguarde alguns segundos ou recarregue a página.");
       return;
     }
-    setIsGenerating(true);
-    const docElement = docRef.current;
-    if (!docElement) return;
 
+    const docElement = docRef.current;
+    const headerElement = headerRef.current;
+    if (!docElement || !headerElement) return;
+
+    let html2canvasLib = (window as any).html2canvas;
+    if (!html2canvasLib && html2pdfLib.html2canvas) {
+      html2canvasLib = html2pdfLib.html2canvas;
+    }
+
+    if (!html2canvasLib) {
+      console.error("PDF Error: html2canvas not found on window or html2pdf object");
+      alert("Erro: Biblioteca de captura (html2canvas) não encontrada. Recarregando scripts...");
+      // Tentativa de recarregar scripts se possível
+      return;
+    }
+
+    setIsGenerating(true);
     // Salvar estilos originais
     const originalStyles = {
       width: docElement.style.width,
@@ -586,58 +612,70 @@ Requerente`;
     };
 
     // Aplicar estilos de A4 temporariamente para a geração do PDF
-    docElement.style.width = '210mm';
-    docElement.style.minHeight = '297mm';
-    docElement.style.paddingTop = '8mm';
-    docElement.style.paddingBottom = '8mm';
-    docElement.style.paddingLeft = '8mm';
-    docElement.style.paddingRight = '8mm';
+    const isRequerimento = step.label === 'Requerimento para o Cartório';
+    const contentPaddingBottom = '10mm';
+    const contentPaddingLeft = '10mm';
+    const contentPaddingRight = '10mm';
 
     try {
-      setGenerationMessage("Iniciando geração...");
+      setGenerationMessage("Capturando cabeçalho...");
+      setGenerationProgress(5);
+
+      // Capturar o cabeçalho sempre para obter a altura e manter o espaço
+      const headerCanvas = await html2canvasLib(headerElement, { scale: 2 });
+      const headerImgData = headerCanvas.toDataURL('image/png');
+      const headerHeightMm = headerCanvas.height * 210 / headerCanvas.width;
+
+      // Agora aplicamos os estilos ao docElement para que ele ocupe a largura útil exata do A4.
+      // Largura A4 (210mm) - Margem Esquerda (10mm) - Margem Direita (10mm) = 190mm.
+      docElement.style.width = '190mm';
+      docElement.style.minHeight = 'auto';
+      docElement.style.padding = '0'; // Removemos o padding para usar as margens globais do PDF
+
+      setGenerationMessage("Gerando conteúdo do documento...");
       setGenerationProgress(10);
 
+      const sideMargin = 10; // Mínimo seguro
+      const topMargin = headerHeightMm + 2; // Mantemos o espaço, com um gap mínimo
+
       const opt = {
-        margin: 0,
+        margin: [topMargin, sideMargin, 10, sideMargin],
         filename: `${step.label}_${property?.name || 'doc'}.pdf`,
         image: { type: 'png', quality: 1.0 },
         html2canvas: {
-          scale: 3,
+          scale: 2,
           useCORS: true,
           letterRendering: true,
           scrollY: 0,
           scrollX: 0,
-          logging: false,
-          dpi: 300
+          logging: false
         },
         pagebreak: { mode: ['css', 'legacy'] },
-        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait', compress: true }
       };
 
-      // Simulação de progresso enquanto o PDF é processado
-      const progressInterval = setInterval(() => {
-        setGenerationProgress(prev => {
-          if (prev >= 90) return prev;
-          if (prev < 40) {
-            setGenerationMessage("Capturando conteúdo...");
-            return prev + 5;
-          }
-          if (prev < 70) {
-            setGenerationMessage("Renderizando componentes...");
-            return prev + 2;
-          }
-          setGenerationMessage("Finalizando arquivo...");
-          return prev + 1;
-        });
-      }, 300);
+      // Gerar conteúdo do PDF e obter o objeto jsPDF
+      const pdf = await html2pdfLib().set(opt).from(docElement).toPdf().get('pdf');
 
-      await html2pdfLib().set(opt).from(docElement).save();
+      // Adicionar a imagem do cabeçalho APENAS se showHeader for true
+      if (showHeader && headerImgData) {
+        setGenerationMessage("Adicionando cabeçalho às páginas...");
+        setGenerationProgress(70);
 
-      clearInterval(progressInterval);
+        const numPages = pdf.internal.getNumberOfPages();
+        for (let i = 1; i <= numPages; i++) {
+          pdf.setPage(i);
+          pdf.addImage(headerImgData, 'PNG', 0, 0, 210, headerHeightMm);
+        }
+      }
+
+      setGenerationMessage("Salvando PDF final...");
+      setGenerationProgress(90);
+      pdf.save(opt.filename);
+
       setGenerationProgress(100);
       setGenerationMessage("Concluído!");
 
-      // Delay pequeno para mostrar o "Concluído"
       await new Promise(resolve => setTimeout(resolve, 800));
 
     } catch (err) {
@@ -660,7 +698,7 @@ Requerente`;
     }
   };
 
-  if (!client || !property || !professional) {
+  if (!client || !property) {
     return (
       <div className="fixed inset-0 z-[100] flex bg-slate-400/10 backdrop-blur-md">
         <div className="bg-white rounded-2xl flex flex-col items-center p-8 shadow-2xl">
@@ -685,6 +723,20 @@ Requerente`;
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            <div className="flex items-center bg-white border border-slate-200 rounded-lg p-0.5 shadow-sm mr-2">
+              <button
+                onClick={() => setShowHeader(true)}
+                className={`px-3 py-1.5 text-[10px] font-bold rounded-md transition-all ${showHeader ? 'bg-primary text-white shadow-sm' : 'text-slate-500 hover:bg-slate-50'}`}
+              >
+                Com Cabeçalho
+              </button>
+              <button
+                onClick={() => setShowHeader(false)}
+                className={`px-3 py-1.5 text-[10px] font-bold rounded-md transition-all ${!showHeader ? 'bg-primary text-white shadow-sm' : 'text-slate-500 hover:bg-slate-50'}`}
+              >
+                Sem Cabeçalho
+              </button>
+            </div>
             {onReject && !isReceiptStep && (
               <button
                 onClick={onReject}
@@ -729,6 +781,23 @@ Requerente`;
               {isGenerating ? <Loader2 size={14} className="animate-spin" /> : <Printer size={14} />} PDF
             </button>
             <button onClick={onClose} className="p-2 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-xl transition-all"><X size={20} /></button>
+          </div>
+        </div>
+
+        {/* HEADER INSTITUCIONAL OCULTO PARA CAPTURA */}
+        <div ref={headerRef} className="absolute -left-[9999px] -top-[9999px] w-[210mm] h-[45mm] p-[20mm] pb-0" style={{ boxSizing: 'border-box' }}>
+          <div className="flex justify-between items-center border-b border-slate-100 pb-6">
+            <div className="flex gap-5 items-center">
+              <img src={LOGO_URL} alt="Logo" className="h-20 w-auto object-contain" crossOrigin="anonymous" />
+              <div className="flex flex-col">
+                <h1 className="text-xl font-black uppercase tracking-tighter text-slate-900 leading-none mb-1">Metrica Agro</h1>
+                <p className="text-[8pt] font-black uppercase tracking-widest text-primary mb-1">Serviços Agronomicos e Geomensura</p>
+                <div className="text-[6pt] text-slate-500 font-bold leading-tight space-y-0.5">
+                  <p>CNPJ: 22.827.795/0001-49</p>
+                  <p>E-mail: metrica.agro@gmail.com | WhatsApp: (64) 99994-0677</p>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -875,36 +944,55 @@ Requerente`;
                 boxSizing: 'border-box',
                 backgroundColor: '#ffffff',
                 color: '#000000',
-                minHeight: '297mm',
-                padding: '20mm'
+                minHeight: isGenerating ? 'auto' : '297mm',
+                padding: isGenerating
+                  ? '0'
+                  : '45mm 10mm 10mm 10mm' // Mínimo seguro de 10mm, mantendo 45mm no topo
               }}
             >
-              {/* HEADER INSTITUCIONAL */}
-              {step.label !== 'Requerimento para o Cartório' && (
-                <div className="flex justify-between items-start border-b-2 border-slate-900 pb-4 mb-4 w-full" style={{ boxSizing: 'border-box' }}>
-                  <div className="flex gap-4 items-center">
-                    <img src={LOGO_URL} alt="Logo" className="h-24 w-auto object-contain" crossOrigin="anonymous" />
-                    <div className="flex flex-col justify-center">
-                      <h1 className="text-xl font-bold uppercase tracking-tighter text-slate-900 leading-none mb-1">Metrica Agro</h1>
-                      <p className="text-[8pt] font-black uppercase tracking-widest text-primary mb-1">Serviços Agronomicos e Geomensura</p>
-                      <div className="text-[6pt] text-slate-500 font-bold leading-tight">
-                        <p>CNPJ: 22.827.795/0001-49</p>
-                        <p>E-mail: metrica.agro@gmail.com | WA: 64 99994-0677</p>
-                        {step.label !== 'RECIBO' && <p>REGISTRO CREA/GO: 12345/D</p>}
+              {/* HEADER INSTITUCIONAL (VISÍVEL APENAS NA TELA) */}
+              {!isGenerating && (
+                <div
+                  className={`absolute top-0 left-0 right-0 h-[45mm] flex items-center px-[25mm] border-b border-slate-50 transition-opacity duration-300 ${showHeader ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+                >
+                  <div className="flex justify-between items-center w-full border-b border-slate-100 pb-6">
+                    <div className="flex gap-5 items-center">
+                      <img src={LOGO_URL} alt="Logo" className="h-20 w-auto object-contain" crossOrigin="anonymous" />
+                      <div className="flex flex-col">
+                        <h1 className="text-xl font-black uppercase tracking-tighter text-slate-900 leading-none mb-1">Metrica Agro</h1>
+                        <p className="text-[8pt] font-black uppercase tracking-widest text-primary mb-1">Serviços Agronomicos e Geomensura</p>
+                        <div className="text-[6pt] text-slate-500 font-bold leading-tight space-y-0.5">
+                          <p>CNPJ: 22.827.795/0001-49</p>
+                          <p>E-mail: metrica.agro@gmail.com | WhatsApp: (64) 99994-0677</p>
+                        </div>
                       </div>
                     </div>
                   </div>
-                  <div className="text-right flex flex-col justify-center h-24">
-                    <div className="bg-primary text-white px-4 py-1 rounded text-[8pt] font-black uppercase tracking-widest mb-2">Nº</div>
-                    <p className="text-lg font-bold text-slate-900">{docNumber}</p>
-                    <p className="text-[8pt] font-bold text-slate-400 uppercase">{today}</p>
+                </div>
+              )}
+
+              {/* DOCUMENT NUMBER DISCRETE ART IN BODY */}
+              {step.label !== 'Requerimento para o Cartório' && (
+                <div className="w-full flex justify-end mb-4">
+                  <div className="flex flex-col items-end">
+                    <div className="border border-slate-300 px-3 py-1.5 rounded-md flex items-center gap-2 bg-slate-50/30">
+                      <span className="text-[7pt] font-bold uppercase tracking-widest text-slate-500">
+                        {getDocPrefix(step.label)}
+                      </span>
+                      <span className="text-sm font-bold tabular-nums border-l border-slate-200 pl-3 text-slate-700">
+                        {docNumber}
+                      </span>
+                    </div>
+                    <div className="mt-1 mr-1 text-[6pt] font-bold text-slate-400 uppercase tracking-[0.2em]">
+                      {today}
+                    </div>
                   </div>
                 </div>
               )}
 
               {/* TÍTULO DO DOCUMENTO */}
-              {step.label !== 'RECIBO' && step.label !== 'Requerimento para o Cartório' && (
-                <div className="text-center mb-6">
+              {step.label !== 'RECIBO' && step.label !== 'Requerimento para o Cartório' && step.label !== 'Documentação (Checklist)' && (
+                <div className="text-center mb-4">
                   <h2 className="text-lg font-bold uppercase border-y-2 border-slate-100 py-2 tracking-widest inline-block px-8">
                     {step.label}
                   </h2>
@@ -994,7 +1082,7 @@ Requerente`;
                       <strong className="uppercase">Contratante:</strong> {client.name.toUpperCase()}, portador do CPF/CNPJ {client.cpf_cnpj}, residente e domiciliado em {typeof client.address === 'string' ? client.address.toUpperCase() : `${client.address?.street || ''}, nº ${client.address?.number || 'S/N'}, ${client.address?.city || ''}`.toUpperCase()}.
                     </p>
                     <p className="indent-8">
-                      <strong className="uppercase">Contratado:</strong> {professional.name.toUpperCase()}, Engenheiro portador do CREA {professional.crea} e CPF {professional.cpf}, com endereço profissional em {professional.address.toUpperCase()}.
+                      <strong className="uppercase">Contratado:</strong> {displayProfessional.name.toUpperCase()}, Engenheiro portador do CREA {displayProfessional.crea} e CPF {displayProfessional.cpf}, com endereço profissional em {displayProfessional.address.toUpperCase()}.
                     </p>
                   </div>
 
@@ -1057,10 +1145,6 @@ Requerente`;
                     <p className="indent-8">E por estarem assim justos e contratados, assinam o presente instrumento em 02 (duas) vias de igual teor e forma, na presença de duas testemunhas.</p>
                   </div>
 
-                  <div className="mt-8 text-right text-[11pt] break-inside-avoid">
-                    <p>{selectedRegistry?.municipality} - GO, {today}.</p>
-                  </div>
-
                 </div>
               ) : step.label === 'Ordem de Serviço' ? (
                 <div className="space-y-6 leading-relaxed text-slate-900 w-full" style={{ boxSizing: 'border-box' }}>
@@ -1116,8 +1200,8 @@ Requerente`;
                   <div className="border border-slate-900 text-[10pt] break-inside-avoid">
                     <div className="bg-slate-100 p-2 font-black uppercase text-center border-b border-slate-900">Responsável Técnico</div>
                     <div className="p-3 grid grid-cols-2 gap-4">
-                      <div className="col-span-2"><span className="font-bold uppercase">Nome Profissional:</span> <span className="uppercase">{professional.name}</span></div>
-                      <div><span className="font-bold uppercase">CREA/Visto:</span> {professional.crea}</div>
+                      <div className="col-span-2"><span className="font-bold uppercase">Nome Profissional:</span> <span className="uppercase">{displayProfessional.name}</span></div>
+                      <div><span className="font-bold uppercase">CREA/Visto:</span> {displayProfessional.crea}</div>
                       <div><span className="font-bold uppercase">ART nº:</span> {selectedCertification?.art_number || project.art_number || '__________________________'}</div>
                     </div>
                   </div>
@@ -1141,10 +1225,6 @@ Requerente`;
                     </div>
                   </div>
 
-                  <div className="mt-8 text-right text-[10pt]">
-                    <p>{selectedRegistry?.municipality} - GO, {today}.</p>
-                  </div>
-
                 </div>
               ) : (step.label === 'Laudo Técnico' || step.label === 'Laudo de Georreferenciamento') ? (
                 <div className="space-y-2 leading-tight text-slate-900 w-full" style={{ boxSizing: 'border-box' }}>
@@ -1152,16 +1232,30 @@ Requerente`;
                   {/* 1. IDENTIFICAÇÃO DO PROFISSIONAL */}
                   <div className="border border-slate-900 page-break-inside-avoid avoid-break" style={{ pageBreakInside: 'avoid' }}>
                     <div className="bg-slate-100 p-1.5 font-bold uppercase border-b border-slate-900 text-[10pt]">1. Identificação do Profissional Responsável</div>
-                    <div className="p-2 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-[10pt]">
-                      <span className="font-bold">Nome:</span> <span>{professional.name}</span>
-                      <div className="col-span-2 grid grid-cols-2 gap-4">
-                        <div><span className="font-bold">CREA:</span> {professional.crea}</div>
-                        <div><span className="font-bold">CPF:</span> {professional.cpf}</div>
+                    <div className="p-2 grid grid-cols-2 gap-x-8 gap-y-2 text-[10pt]">
+                      <div className="col-span-2 flex gap-2">
+                        <span className="font-bold min-w-[60px]">Nome:</span>
+                        <span className="uppercase">{displayProfessional.name}</span>
                       </div>
-                      <span className="font-bold">Endereço:</span> <span>{professional.address}</span>
-                      <div className="col-span-2 grid grid-cols-2 gap-4">
-                        <div><span className="font-bold">Telefone:</span> {professional.phone}</div>
-                        <div><span className="font-bold">E-mail:</span> {professional.email}</div>
+                      <div className="flex gap-2">
+                        <span className="font-bold min-w-[60px]">CREA:</span>
+                        <span>{displayProfessional.crea}</span>
+                      </div>
+                      <div className="flex gap-2">
+                        <span className="font-bold min-w-[60px]">CPF:</span>
+                        <span>{displayProfessional.cpf}</span>
+                      </div>
+                      <div className="col-span-2 flex gap-2">
+                        <span className="font-bold min-w-[60px]">Endereço:</span>
+                        <span className="uppercase">{displayProfessional.address}</span>
+                      </div>
+                      <div className="flex gap-2">
+                        <span className="font-bold min-w-[60px]">Telefone:</span>
+                        <span>{displayProfessional.phone}</span>
+                      </div>
+                      <div className="flex gap-2">
+                        <span className="font-bold min-w-[60px]">E-mail:</span>
+                        <span className="lowercase">{displayProfessional.email}</span>
                       </div>
                     </div>
                   </div>
@@ -1212,7 +1306,7 @@ Requerente`;
                   </div>
 
                   {/* 5. CONFRONTAÇÕES E LIMITES */}
-                  <div className="border border-slate-900 break-inside-avoid page-break-inside-avoid avoid-break" style={{ breakInside: 'avoid', pageBreakInside: 'avoid' }}>
+                  <div className="border border-slate-900 break-inside-avoid">
                     <div className="bg-slate-100 p-1.5 font-bold uppercase border-b border-slate-900 text-[10pt]">5. Confrontações e Limites</div>
                     <div className="p-2 text-justify text-[9pt]">
                       <p className="indent-6">
@@ -1221,19 +1315,21 @@ Requerente`;
                     </div>
                   </div>
 
-                  <div className="mt-6 mb-8 text-right text-[9pt]">
-                    <p>{property.municipality}, {today}</p>
+                  <div className="mt-16 mb-12 text-right text-[9pt] break-inside-avoid">
+                    <p>{getFullDate(customDate, property.municipality)}</p>
                   </div>
 
                   {/* ASSINATURA PROFISSIONAL */}
-                  <div className="mt-4 flex flex-col items-center text-center break-inside-avoid page-break-inside-avoid avoid-break" style={{ breakInside: 'avoid', pageBreakInside: 'avoid' }}>
+                  <div className="flex flex-col items-center text-center break-inside-avoid page-break-inside-avoid avoid-break" style={{ breakInside: 'avoid', pageBreakInside: 'avoid' }}>
+                    {/* ESPAÇO FORÇADO PARA ASSINATURA - Movidp para dentro do bloco avoid-break */}
+                    <div className="h-[40mm]"></div>
                     <div className="w-80 border-t border-slate-900 mb-1"></div>
-                    <p className="font-black uppercase text-[9pt]">{professional.name}</p>
+                    <p className="font-black uppercase text-[9pt]">{displayProfessional.name}</p>
                     <p className="text-[8pt] leading-tight">Engenheiro Agrônomo</p>
                     <div className="text-[8pt] mt-1 space-y-0.5">
-                      <p>CREA: {professional.crea} | CPF: {professional.cpf}</p>
+                      <p>CREA: {displayProfessional.crea} | CPF: {displayProfessional.cpf}</p>
                       <p>ART Nº {selectedCertification?.art_number || project.art_number || '________________'}</p>
-                      <p>Cód. Credenciado: {professional.incra_code || '___'}</p>
+                      <p>Cód. Credenciado: {displayProfessional.incra_code || '___'}</p>
                     </div>
                   </div>
 
@@ -1292,88 +1388,100 @@ Requerente`;
                   </div>
 
                   {/* DATA E ASSINATURA */}
-                  <div className="mt-16 text-right">
-                    <p className="text-[11pt] font-medium text-slate-700">{selectedRegistry?.municipality || property.municipality} - GO, {today}.</p>
+                  <div className="mt-12 text-right">
+                    <p className="text-[11pt] font-medium text-slate-700">{getFullDate(customDate, selectedRegistry?.municipality || property.municipality)}</p>
                   </div>
 
                   {/* ASSINATURAS */}
-                  <div className="mt-48 flex justify-center text-center">
+                  <div className="flex justify-center text-center break-inside-avoid page-break-inside-avoid">
                     <div className="flex flex-col items-center w-80">
+                      <div className="h-[30mm]"></div>
                       <div className="w-full border-t border-slate-900 mb-2"></div>
-                      <p className="text-[9pt] font-black uppercase text-slate-900">{professional.name}</p>
+                      <p className="text-[9pt] font-black uppercase text-slate-900">{displayProfessional.name}</p>
                       <p className="text-[7pt] text-slate-500 font-bold uppercase tracking-widest">Responsável Técnico</p>
-                      <p className="text-[7pt] text-slate-400 font-bold">CREA: {professional.crea} | CPF: {professional.cpf}</p>
+                      <p className="text-[7pt] text-slate-400 font-bold">CREA: {displayProfessional.crea} | CPF: {displayProfessional.cpf}</p>
                     </div>
                   </div>
 
                 </div>
               ) : step.label === 'Requerimento para o Cartório' ? (
-                <div className="flex-1 px-[10mm] py-[5mm]">
+                <div className="flex-1 px-[2mm] pt-0 pb-[5mm]">
                   <div
-                    className="whitespace-pre-wrap text-slate-900 text-[12pt] text-justify leading-relaxed border border-slate-900 p-[10mm] min-h-[200mm] flex flex-col"
+                    className="whitespace-pre-wrap text-slate-900 text-[12pt] text-justify leading-relaxed border border-slate-900 px-[5mm] pt-0 pb-[10mm] min-h-[150mm] flex flex-col"
                     style={{
                       boxSizing: 'border-box'
                     }}
                   >
-                    <div className="text-center mb-10">
-                      <h2 className="text-2xl font-black uppercase tracking-widest text-slate-900">REQUERIMENTO</h2>
+                    <div className="text-center mb-2">
+                      <h2 className="text-2xl font-black uppercase tracking-widest text-slate-900">
+                        {selectedRegistry?.cns === '02.648-4' ? 'REQUERIMENTO' : 'REQUERIMENTO PARA AVERBAÇÃO'}
+                      </h2>
                     </div>
 
                     <div className="flex-1">
                       {textContent}
                     </div>
 
-                    <div className="mt-20 pt-8 flex justify-center text-center mb-10 break-inside-avoid">
-                      <div className="flex flex-col items-center w-80">
-                        <div className="w-full border-t border-slate-900 mb-1"></div>
-                        <p className="text-[10pt] font-black uppercase text-slate-900 leading-tight">{client.name}</p>
-                        <p className="text-[8pt] text-slate-500 font-bold uppercase tracking-widest">Proprietário do Imóvel</p>
-                        <p className="text-[8pt] text-slate-400 font-bold">CPF/CNPJ: {client.cpf_cnpj}</p>
-                      </div>
-                    </div>
+                    {selectedRegistry?.cns !== '02.612-0' && (
+                      <>
+                        <div className="mt-12 text-right text-[11pt] break-inside-avoid">
+                          <p>{getFullDate(customDate, selectedRegistry?.municipality || property.municipality || 'Rio Verde')}</p>
+                        </div>
+
+                        <div className="flex justify-center text-center mb-10 break-inside-avoid page-break-inside-avoid">
+                          <div className="flex flex-col items-center w-80">
+                            <div className="h-[30mm]"></div>
+                            <div className="w-full border-t border-slate-900 mb-1"></div>
+                            <p className="text-[10pt] font-black uppercase text-slate-900 leading-tight">{client.name}</p>
+                            <p className="text-[8pt] text-slate-500 font-bold uppercase tracking-widest">Proprietário do Imóvel</p>
+                            <p className="text-[8pt] text-slate-400 font-bold">CPF/CNPJ: {client.cpf_cnpj}</p>
+                          </div>
+                        </div>
+                      </>
+                    )}
                   </div>
                 </div>
-              ) : step.label === 'Capa do Processo' ? (
-                <div className="space-y-8 leading-relaxed text-slate-900 w-full" style={{ boxSizing: 'border-box' }}>
+              ) : step.label === 'Documentação (Checklist)' ? (
+                <div className="space-y-3 leading-tight text-slate-900 w-full" style={{ boxSizing: 'border-box' }}>
 
-                  <div className="text-center mb-12">
-                    <h2 className="text-2xl font-black uppercase tracking-widest text-slate-900 border-b-4 border-primary inline-block px-8 py-2">
+                  <div className="text-center mb-4">
+                    <h2 className="text-xl font-black uppercase tracking-widest text-slate-900 border-b-2 border-primary inline-block px-6 py-1">
                       DOCUMENTAÇÃO (CHECKLIST)
                     </h2>
                   </div>
 
                   {/* IDENTIFICAÇÃO */}
-                  <div className="grid grid-cols-1 gap-6 mb-10">
-                    <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl">
-                      <h3 className="text-xs font-black uppercase tracking-widest text-slate-400 mb-2 border-b border-slate-200 pb-1">Interessado</h3>
-                      <p className="text-lg font-bold text-slate-900 uppercase">{client.name}</p>
-                      <p className="text-sm text-slate-600">CPF/CNPJ: {client.cpf_cnpj}</p>
+                  <div className="grid grid-cols-1 gap-2 mb-3">
+                    <div className="p-2 bg-slate-50 border border-slate-200 rounded-lg">
+                      <h3 className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1 border-b border-slate-200 pb-0.5">Interessado</h3>
+                      <p className="text-base font-bold text-slate-900 uppercase leading-none">{client.name}</p>
+                      <p className="text-xs text-slate-600">CPF/CNPJ: {client.cpf_cnpj}</p>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-6">
-                      <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl">
-                        <h3 className="text-xs font-black uppercase tracking-widest text-slate-400 mb-2 border-b border-slate-200 pb-1">Imóvel Rural</h3>
-                        <p className="text-sm font-bold text-slate-900 uppercase">{property.name}</p>
-                        <p className="text-xs text-slate-600">Matrícula: {property.registration_number}</p>
-                        <p className="text-xs text-slate-600">{property.municipality} - GO</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="p-2 bg-slate-50 border border-slate-200 rounded-lg">
+                        <h3 className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1 border-b border-slate-200 pb-0.5">Imóvel Rural</h3>
+                        <p className="text-xs font-bold text-slate-900 uppercase leading-tight">{property.name}</p>
+                        <p className="text-[10px] text-slate-600">Matrícula: {property.registration_number}</p>
+                        <p className="text-[10px] text-slate-600">{property.municipality} - GO</p>
                       </div>
-                      <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl">
-                        <h3 className="text-xs font-black uppercase tracking-widest text-slate-400 mb-2 border-b border-slate-200 pb-1">Responsável Técnico</h3>
-                        <p className="text-sm font-bold text-slate-900 uppercase">{professional.name}</p>
-                        <p className="text-xs text-slate-600">CREA: {professional.crea}</p>
-                        <p className="text-xs text-slate-600">ART: {selectedCertification?.art_number || 'N/A'}</p>
+                      <div className="p-2 bg-slate-50 border border-slate-200 rounded-lg">
+                        <h3 className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1 border-b border-slate-200 pb-0.5">Responsável Técnico</h3>
+                        <p className="text-xs font-bold text-slate-900 uppercase leading-tight">{displayProfessional.name}</p>
+                        <p className="text-[10px] text-slate-600">CREA: {displayProfessional.crea}</p>
+                        <p className="text-[10px] text-slate-600">ART: {selectedCertification?.art_number || project?.art_number || 'N/A'}</p>
                       </div>
                     </div>
                   </div>
 
                   {/* CHECKLIST */}
-                  <div className="space-y-4">
-                    <div className="flex items-center gap-2 mb-4">
-                      <CheckCircle2 className="text-primary" size={24} />
-                      <h3 className="text-lg font-bold uppercase text-slate-900">Documentos Apresentados</h3>
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2 mb-1">
+                      <CheckCircle2 className="text-primary" size={18} />
+                      <h3 className="text-sm font-bold uppercase text-slate-900">Documentos Apresentados</h3>
                     </div>
 
-                    <div className="space-y-3">
+                    <div className="space-y-1">
                       {(() => {
                         try {
                           const checklistState = step.notes ? JSON.parse(step.notes) : {};
@@ -1390,28 +1498,28 @@ Requerente`;
                             items = CHECKLIST_RIO_VERDE;
                           }
                           return items.map(item => (
-                            <div key={item.id} className="flex items-start gap-3 p-3 border-b border-slate-100 last:border-0">
-                              <div className={`w-5 h-5 border-2 rounded flex items-center justify-center shrink-0 mt-0.5 ${checklistState[item.id] ? 'bg-primary border-primary text-white' : 'border-slate-300'}`}>
-                                {checklistState[item.id] && <CheckCircle2 size={14} />}
+                            <div key={item.id} className="flex items-start gap-2 p-1.5 border-b border-slate-100 last:border-0 break-inside-avoid page-break-inside-avoid">
+                              <div className={`w-4 h-4 border-2 rounded flex items-center justify-center shrink-0 mt-0.5 ${checklistState[item.id] ? 'bg-primary border-primary text-white' : 'border-slate-300'}`}>
+                                {checklistState[item.id] && <CheckCircle2 size={10} />}
                               </div>
-                              <p className={`text-sm leading-relaxed ${checklistState[item.id] ? 'font-bold text-slate-900' : 'text-slate-400'}`}>
+                              <p className={`text-[11px] leading-tight ${checklistState[item.id] ? 'font-bold text-slate-900' : 'text-slate-400'}`}>
                                 {item.label}
                               </p>
                             </div>
                           ));
                         } catch {
-                          return <p className="text-rose-500">Erro ao carregar lista de documentos.</p>;
+                          return <p className="text-rose-500 text-xs">Erro ao carregar lista de documentos.</p>;
                         }
                       })()}
                     </div>
                   </div>
 
                   {/* OBSERVAÇÃO */}
-                  <div className="mt-12 p-4 bg-slate-100 rounded-xl text-center">
-                    <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">
+                  <div className="mt-4 p-2 bg-slate-100 rounded-lg text-center">
+                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest leading-none">
                       Protocolo para {selectedRegistry?.name || 'Registro de Imóveis'}
                     </p>
-                    <p className="text-[10px] text-slate-400 mt-1">
+                    <p className="text-[9px] text-slate-400 mt-0.5">
                       {selectedRegistry?.municipality || 'Local'} - GO, {today}
                     </p>
                   </div>
@@ -1423,26 +1531,37 @@ Requerente`;
               )}
 
               {/* ASSINATURAS GLOBAIS */}
-              {step.label !== 'RECIBO' && step.label !== 'Requerimento para o Cartório' && (
-                <div className="mt-10 pt-8 grid grid-cols-2 gap-16 text-center mb-10 break-inside-avoid page-break-inside-avoid">
-                  <div className="flex flex-col items-center">
-                    <div className="w-full border-t border-slate-900 mb-1"></div>
-                    <p className="text-[8pt] font-black uppercase text-slate-900 leading-tight">{professional.name}</p>
-                    <p className="text-[6pt] text-slate-500 font-bold uppercase tracking-widest">Responsável Técnico</p>
-                    <p className="text-[6pt] text-slate-400 font-bold">CREA: {professional.crea}</p>
-                  </div>
-                  <div className="flex flex-col items-center">
-                    <div className="w-full border-t border-slate-900 mb-1"></div>
-                    <p className="text-[8pt] font-black uppercase text-slate-900 leading-tight">{client.name}</p>
-                    <p className="text-[6pt] text-slate-500 font-bold uppercase tracking-widest">Contratante / Proprietário</p>
-                    <p className="text-[6pt] text-slate-400 font-bold">CPF/CNPJ: {client.cpf_cnpj}</p>
-                  </div>
-                </div>
-              )}
+              {step.label !== 'RECIBO' &&
+                step.label !== 'Requerimento para o Cartório' &&
+                step.label !== 'Laudo Técnico' &&
+                step.label !== 'Laudo de Georreferenciamento' &&
+                step.label !== 'Documentação (Checklist)' && (
+                  <>
+                    <div className="mt-12 text-right text-[10pt]">
+                      <p>{getFullDate(customDate, selectedRegistry?.municipality || property.municipality || 'Montividiu')}</p>
+                    </div>
+                    <div className="mt-8 pt-8 grid grid-cols-2 gap-16 text-center mb-10 break-inside-avoid page-break-inside-avoid">
+                      <div className="flex flex-col items-center">
+                        <div className="h-[30mm]"></div>
+                        <div className="w-full border-t border-slate-900 mb-1"></div>
+                        <p className="text-[8pt] font-black uppercase text-slate-900 leading-tight">{displayProfessional.name}</p>
+                        <p className="text-[6pt] text-slate-500 font-bold uppercase tracking-widest">Responsável Técnico</p>
+                        <p className="text-[6pt] text-slate-400 font-bold">CREA: {displayProfessional.crea}</p>
+                      </div>
+                      <div className="flex flex-col items-center">
+                        <div className="h-[30mm]"></div>
+                        <div className="w-full border-t border-slate-900 mb-1"></div>
+                        <p className="text-[8pt] font-black uppercase text-slate-900 leading-tight">{client.name}</p>
+                        <p className="text-[6pt] text-slate-500 font-bold uppercase tracking-widest">Contratante / Proprietário</p>
+                        <p className="text-[6pt] text-slate-400 font-bold">CPF/CNPJ: {client.cpf_cnpj}</p>
+                      </div>
+                    </div>
+                  </>
+                )}
 
 
               {/* FOOTER INSTITUCIONAL */}
-              <div className="w-full py-6 border-t border-slate-200 mt-auto grid grid-cols-3 items-center text-[7pt] text-slate-400 font-bold" style={{ boxSizing: 'border-box' }}>
+              <div className="w-full py-6 border-t border-slate-200 grid grid-cols-3 items-center text-[7pt] text-slate-400 font-bold" style={{ boxSizing: 'border-box' }}>
                 <div className="text-left">
                   <p>Página 1</p>
                 </div>

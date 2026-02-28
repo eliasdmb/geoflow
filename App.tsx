@@ -69,6 +69,7 @@ import { useAuth } from './contexts/AuthContext';
 import ProfileSettings from './components/ProfileSettings';
 import ProtectedRoute from './components/ProtectedRoute';
 import { logAudit } from './lib/audit';
+import { computeNextProjectNumber } from './utils';
 import ProgressBar from './components/ProgressBar';
 
 interface Notification {
@@ -198,44 +199,70 @@ const App: React.FC = () => {
       setProjects(pData?.map(p => ({ ...p, steps: Array.isArray(p.steps) ? [...p.steps].sort((a: any, b: any) => a.step_id - b.step_id) : [] })) || []);
       setClients(cData || []);
 
-      const [
-        financialTransactionsResponse,
-        propertiesResponse,
-        professionalsResponse,
-        registriesResponse,
-        servicesResponse,
-        budgetItemTemplatesResponse,
-        sigefCertificationsResponse,
-        appointmentsResponse,
-        creditCardsResponse,
-        creditCardExpensesResponse,
-        accountsResponse
-      ] = await Promise.all([
-        supabase.from('financial_transactions').select('*').eq('user_id', uid).order('due_date', { ascending: false }),
-        supabase.from('properties').select('*').eq('user_id', uid),
-        supabase.from('professionals').select('*').eq('user_id', uid),
-        supabase.from('registries').select('*').eq('user_id', uid),
-        supabase.from('services').select('*').eq('user_id', uid),
-        supabase.from('budget_templates').select('*').eq('user_id', uid),
-        supabase.from('sigef_certifications').select('*').eq('user_id', uid),
-        supabase.from('appointments').select('*').eq('user_id', uid),
-        supabase.from('credit_cards').select('*').eq('user_id', uid),
-        supabase.from('credit_card_expenses').select('*').eq('user_id', uid),
-        supabase.from('accounts').select('*').eq('user_id', uid)
-      ]);
+      // Liberar o carregamento inicial assim que os dados críticos (projetos e clientes) estiverem prontos
+      setLoading(false);
+      setInitialLoad(false);
+      endProgress();
+      clearTimeout(safetyTimeout);
 
-      setTransactions(financialTransactionsResponse.data || []);
-      setProperties(propertiesResponse.data || []);
-      setProfessionals(professionalsResponse.data || []);
-      setRegistries(registriesResponse.data || []);
-      setServices(servicesResponse.data || []);
-      setBudgetItemTemplates(budgetItemTemplatesResponse.data || []);
-      setSigefCertifications(sigefCertificationsResponse.data || []);
-      appointmentsData = appointmentsResponse.data || [];
-      setAppointments(appointmentsData);
-      setCreditCards(creditCardsResponse.data || []);
-      setCreditCardExpenses(creditCardExpensesResponse.data || []);
-      setAccounts(accountsResponse.data || []);
+      // Carregar o restante dos dados em segundo plano (background) para não travar o login
+      const fetchSecondaryData = async () => {
+        try {
+          const [
+            financialTransactionsResponse,
+            propertiesResponse,
+            professionalsResponse,
+            registriesResponse,
+            servicesResponse,
+            budgetItemTemplatesResponse,
+            sigefCertificationsResponse,
+            appointmentsResponse,
+            creditCardsResponse,
+            creditCardExpensesResponse,
+            accountsResponse
+          ] = await Promise.all([
+            supabase.from('financial_transactions').select('*').eq('user_id', uid).order('due_date', { ascending: false }),
+            supabase.from('properties').select('*').eq('user_id', uid),
+            supabase.from('professionals').select('*').eq('user_id', uid),
+            supabase.from('registries').select('*').eq('user_id', uid),
+            supabase.from('services').select('*').eq('user_id', uid),
+            supabase.from('budget_templates').select('*').eq('user_id', uid),
+            supabase.from('sigef_certifications').select('*').eq('user_id', uid),
+            supabase.from('appointments').select('*').eq('user_id', uid),
+            supabase.from('credit_cards').select('*').eq('user_id', uid),
+            supabase.from('credit_card_expenses').select('*').eq('user_id', uid),
+            supabase.from('accounts').select('*').eq('user_id', uid)
+          ]);
+
+          setTransactions(financialTransactionsResponse.data || []);
+          setProperties(propertiesResponse.data || []);
+          setProfessionals(professionalsResponse.data || []);
+          setRegistries(registriesResponse.data || []);
+          setServices(servicesResponse.data || []);
+          setBudgetItemTemplates(budgetItemTemplatesResponse.data || []);
+          setSigefCertifications(sigefCertificationsResponse.data || []);
+          const appointmentsData = appointmentsResponse.data || [];
+          setAppointments(appointmentsData);
+          setCreditCards(creditCardsResponse.data || []);
+          setCreditCardExpenses(creditCardExpensesResponse.data || []);
+          setAccounts(accountsResponse.data || []);
+
+          // Notificações de compromissos
+          const hasNotifiedRef = (window as any)._hasNotifiedToday;
+          if (!hasNotifiedRef && appointmentsData.length > 0) {
+            const today = new Date().toDateString();
+            const todayApps = appointmentsData.filter(a => new Date(a.start_time).toDateString() === today && a.status !== 'cancelled' && a.status !== 'completed');
+            if (todayApps.length > 0) {
+              showNotification(`Você tem ${todayApps.length} ${todayApps.length === 1 ? 'compromisso agendado' : 'compromissos agendados'} para hoje!`, 'alert');
+              (window as any)._hasNotifiedToday = true;
+            }
+          }
+        } catch (err) {
+          console.error("App: Error fetching background data:", err);
+        }
+      };
+
+      fetchSecondaryData();
 
     } catch (err: any) {
       console.error("App: fetchInitialData error:", err);
@@ -245,21 +272,10 @@ const App: React.FC = () => {
       } else {
         setDbError(msg);
       }
-    } finally {
-      console.log("App: fetchInitialData finished");
       setLoading(false);
       setInitialLoad(false);
       endProgress();
       clearTimeout(safetyTimeout);
-      const hasNotifiedRef = (window as any)._hasNotifiedToday;
-      if (!hasNotifiedRef && appointmentsData.length > 0) {
-        const today = new Date().toDateString();
-        const todayApps = appointmentsData.filter(a => new Date(a.start_time).toDateString() === today && a.status !== 'cancelled' && a.status !== 'completed');
-        if (todayApps.length > 0) {
-          showNotification(`Você tem ${todayApps.length} ${todayApps.length === 1 ? 'compromisso agendado' : 'compromissos agendados'} para hoje!`, 'alert');
-          (window as any)._hasNotifiedToday = true;
-        }
-      }
     }
   }, [simulateProgress, showNotification]);
 
@@ -537,6 +553,7 @@ const App: React.FC = () => {
     const uid = userIdRef.current;
     if (!uid) return false;
     try {
+      const nextNumber = computeNextProjectNumber(projects);
       const payload: any = {
         title,
         client_id: clientId,
@@ -546,7 +563,8 @@ const App: React.FC = () => {
         registry_id: registryId,
         deadline: deadline || null,
         current_step_index: 0,
-        user_id: uid
+        user_id: uid,
+        project_number: nextNumber
       };
 
       // Só envia os novos campos se eles forem preenchidos, para evitar erros se as colunas não existirem

@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   Plus,
   Search,
@@ -22,6 +22,7 @@ import {
   ClipboardCheck
 } from 'lucide-react';
 import { formatDate } from '../utils';
+import { computeNextProjectNumber } from '../utils';
 import { Project, Client, RuralProperty, Professional, ProjectStatus, Service, Registry, WorkflowStepId } from '../types';
 
 interface ProjectManagementProps {
@@ -69,6 +70,9 @@ const ProjectManagement: React.FC<ProjectManagementProps> = ({
   });
 
   const isCarSelected = services.find(s => s.id === formData.serviceId)?.name?.toUpperCase().includes('CAR');
+
+  const nextProjectNumber = computeNextProjectNumber(projects);
+
 
   const handleEdit = (project: Project) => {
     setEditingId(project.id);
@@ -160,13 +164,18 @@ const ProjectManagement: React.FC<ProjectManagementProps> = ({
     return 'normal';
   };
 
-  const normalizedSearch = searchTerm.trim().toLowerCase();
-  const filteredProjects = normalizedSearch.length === 0
-    ? projects
-    : projects.filter(p => {
-      const clientName = clients.find(c => c.id === p.client_id)?.name;
-      return p.title.toLowerCase().includes(normalizedSearch) || clientName?.toLowerCase().includes(normalizedSearch);
-    });
+  const filteredProjects = projects.filter(p => {
+    const client = clients.find(c => c.id === p.client_id);
+    const property = properties.find(prop => prop.id === p.property_id);
+    const searchTermLower = searchTerm.trim().toLowerCase();
+
+    return (
+      p.title.toLowerCase().includes(searchTermLower) ||
+      client?.name.toLowerCase().includes(searchTermLower) ||
+      property?.name.toLowerCase().includes(searchTermLower) ||
+      (p.project_number || '').toLowerCase().includes(searchTermLower)
+    );
+  });
 
   return (
     <div className="space-y-6">
@@ -202,7 +211,7 @@ const ProjectManagement: React.FC<ProjectManagementProps> = ({
         <div className="bg-white/70 border border-slate-200/60 rounded-2xl p-8 text-center">
           <p className="text-sm font-bold text-slate-700">Nenhum projeto encontrado</p>
           <p className="text-xs text-slate-500 mt-2">Verifique o filtro de busca ou crie um novo projeto.</p>
-          {normalizedSearch.length > 0 && (
+          {searchTerm.trim().length > 0 && (
             <button
               onClick={() => setSearchTerm('')}
               className="mt-4 inline-flex items-center gap-2 px-3 py-1.5 bg-primary text-white rounded-lg hover:bg-primary-dark transition-all text-xs font-black uppercase tracking-widest shadow-lg shadow-primary/10"
@@ -240,10 +249,9 @@ const ProjectManagement: React.FC<ProjectManagementProps> = ({
 
               <div className="p-5">
                 <div className="flex justify-between items-start mb-4">
-                  <div onClick={() => onSelectProject(project.id)} className="cursor-pointer">
-                    <span className={`text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded ${isPending ? 'text-rose-600 bg-rose-50' : 'text-primary bg-primary/10'
-                      }`}>
-                      ID: {project.id.slice(0, 8)}
+                  <div onClick={() => onSelectProject(project.id)} className="cursor-pointer flex flex-col gap-1 overflow-hidden">
+                    <span className="text-[10px] font-black text-primary uppercase tracking-widest bg-primary/5 px-2 py-0.5 rounded border border-primary/10 w-fit">
+                      Projeto #{project.project_number || '---'}
                     </span>
                     <h3 className={`text-base font-black mt-1.5 transition-colors tracking-tight ${urgency === 'critical' ? 'text-rose-900' : 'text-secondary'
                       }`}>
@@ -306,7 +314,14 @@ const ProjectManagement: React.FC<ProjectManagementProps> = ({
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-400/10 backdrop-blur-md">
           <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-300">
             <div className="p-6 border-b border-slate-100 flex items-center justify-between">
-              <h2 className="text-xl font-bold text-slate-800">{editingId ? 'Editar Projeto' : 'Novo Projeto'}</h2>
+              <div>
+                <h2 className="text-xl font-bold text-slate-800">{editingId ? 'Editar Projeto' : 'Novo Projeto'}</h2>
+                {!editingId && (
+                  <p className="text-[10px] font-black text-primary uppercase tracking-[0.2em] mt-1">
+                    Sequência Automática: #{nextProjectNumber}
+                  </p>
+                )}
+              </div>
               <button onClick={() => setShowModal(false)} className="text-slate-400 hover:text-slate-600">
                 <X size={24} />
               </button>

@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   ArrowLeft,
   CheckCircle2,
@@ -31,14 +31,14 @@ import {
   CloudCheck
 } from 'lucide-react';
 import { Project, Client, RuralProperty, Professional, WorkflowStepId, ProjectStatus, SigefCertification, Service, BudgetItemTemplate, Registry, FinancialTransaction } from '../types';
-import { WORKFLOW_STEPS_DEFINITION } from '../constants';
+import { WORKFLOW_STEPS_DEFINITION, CAR_WORKFLOW_STEPS_DEFINITION } from '../constants';
 import DocumentPreview from './DocumentPreview';
 
 interface ProjectWorkflowProps {
   project: Project;
   client: Client;
   property: RuralProperty;
-  professional: Professional;
+  professional?: Professional;
   service: Service;
   allProjects: Project[];
   allClients: Client[];
@@ -128,9 +128,15 @@ const ProjectWorkflow: React.FC<ProjectWorkflowProps> = ({
   userName,
   onCreateTransaction
 }) => {
-  const [selectedStepIndex, setSelectedStepIndex] = useState(project.current_step_index || 0);
+  const steps = project.steps || [];
+
+  const [selectedStepIndex, setSelectedStepIndex] = useState(() => {
+    const idx = project.current_step_index || 0;
+    return (steps.length > 0 && idx >= steps.length) ? 0 : idx;
+  });
+
   const [showDocPreview, setShowDocPreview] = useState(false);
-  // State specifically for generating the "Capa do Processo"
+  // State specifically for generating the "Documentação (Checklist)"
   const [showCoverPreview, setShowCoverPreview] = useState(false);
 
   const [notes, setNotes] = useState('');
@@ -139,13 +145,16 @@ const ProjectWorkflow: React.FC<ProjectWorkflowProps> = ({
   const [isInitializing, setIsInitializing] = useState(false);
   const [hasTriedInit, setHasTriedInit] = useState(false);
   const [checklistState, setChecklistState] = useState<Record<string, boolean>>({});
+  const [pointsState, setPointsState] = useState({ m: '', p: '', v: '' });
 
   const autoSaveTimeoutRef = useRef<number | null>(null);
 
-  const steps = project.steps || [];
+
+
   const selectedStep = steps[selectedStepIndex];
   const isCriStep = selectedStep?.step_id === WorkflowStepId.CRI_REGISTRATION;
   const isDocumentationStep = selectedStep?.step_id === WorkflowStepId.DOCUMENTATION;
+  const isPointControlStep = selectedStep?.step_id === WorkflowStepId.POINT_CONTROL;
 
   const registry = allRegistries.find(r => r.id === project.registry_id);
   const isMontividiu = registry?.cns === MONTIVIDIU_CNS;
@@ -186,27 +195,40 @@ const ProjectWorkflow: React.FC<ProjectWorkflowProps> = ({
         setChecklistState({});
       }
     }
-  }, [selectedStep?.id, hasChecklist]);
+
+    if (isPointControlStep) {
+      try {
+        const parsed = JSON.parse(currentNotes);
+        setPointsState(typeof parsed === 'object' && parsed !== null ? { m: parsed.m || '', p: parsed.p || '', v: parsed.v || '' } : { m: '', p: '', v: '' });
+      } catch {
+        setPointsState({ m: '', p: '', v: '' });
+      }
+    }
+  }, [selectedStep?.id, hasChecklist, isPointControlStep]);
 
   // ... (keep existing useEffects regarding autoSave and key handlers) ...
   // Re-implementing autoSave logic for context completeness
   useEffect(() => {
-    if (!selectedStep || !isCriStep) return;
-    if (notes === lastSavedNotes) {
+    if (!selectedStep || (!isCriStep && !isPointControlStep)) return;
+
+    // For Point Control, we use pointsState instead of notes. Notes still contains stringified points.
+    let currentDataToSave = isPointControlStep ? JSON.stringify(pointsState) : notes;
+
+    if (currentDataToSave === lastSavedNotes) {
       setIsSavingNotes(false);
       return;
     }
     setIsSavingNotes(true);
     if (autoSaveTimeoutRef.current) window.clearTimeout(autoSaveTimeoutRef.current);
     autoSaveTimeoutRef.current = window.setTimeout(() => {
-      onUpdateStep(selectedStep.id!, selectedStep.status, notes);
-      setLastSavedNotes(notes);
+      onUpdateStep(selectedStep.id!, selectedStep.status, currentDataToSave);
+      setLastSavedNotes(currentDataToSave);
       setIsSavingNotes(false);
     }, 1500);
     return () => {
       if (autoSaveTimeoutRef.current) window.clearTimeout(autoSaveTimeoutRef.current);
     };
-  }, [notes, selectedStep?.id, isCriStep, selectedStep?.status, onUpdateStep]);
+  }, [notes, pointsState, selectedStep?.id, isCriStep, isPointControlStep, selectedStep?.status, onUpdateStep]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -233,6 +255,7 @@ const ProjectWorkflow: React.FC<ProjectWorkflowProps> = ({
   };
 
   const handleWhatsAppNotification = () => {
+    if (!professional) return;
     const cleanPhone = client.phone.replace(/\D/g, '');
     const message = encodeURIComponent(
       `Olá *${client.name}*, informamos que o projeto de georreferenciamento do imóvel *${property.name}* avançou para a etapa de *Registro no CRI*. Atenciosamente, *${professional.name}* (MétricaAgro).`
@@ -247,10 +270,12 @@ const ProjectWorkflow: React.FC<ProjectWorkflowProps> = ({
   };
 
   const handleRequestApproval = () => {
-    const finalNotes = hasChecklist ? JSON.stringify(checklistState) : notes;
+    let finalNotes = notes;
+    if (hasChecklist) finalNotes = JSON.stringify(checklistState);
+    if (isPointControlStep) finalNotes = JSON.stringify(pointsState);
 
     // Se for etapa de Documentação, finaliza direto e avança
-    if (isDocumentationStep) {
+    if (isDocumentationStep || isPointControlStep) {
       onUpdateStep(selectedStep.id!, ProjectStatus.COMPLETED, finalNotes);
       if (selectedStepIndex < steps.length - 1) {
         setSelectedStepIndex(selectedStepIndex + 1);
@@ -261,7 +286,10 @@ const ProjectWorkflow: React.FC<ProjectWorkflowProps> = ({
   };
 
   const handleApproveStep = () => {
-    const finalNotes = hasChecklist ? JSON.stringify(checklistState) : notes;
+    let finalNotes = notes;
+    if (hasChecklist) finalNotes = JSON.stringify(checklistState);
+    if (isPointControlStep) finalNotes = JSON.stringify(pointsState);
+
     onUpdateStep(selectedStep.id!, ProjectStatus.COMPLETED, finalNotes);
     if (selectedStepIndex < steps.length - 1) {
       setSelectedStepIndex(selectedStepIndex + 1);
@@ -269,7 +297,10 @@ const ProjectWorkflow: React.FC<ProjectWorkflowProps> = ({
   };
 
   const handleRejectStep = () => {
-    const finalNotes = hasChecklist ? JSON.stringify(checklistState) : notes;
+    let finalNotes = notes;
+    if (hasChecklist) finalNotes = JSON.stringify(checklistState);
+    if (isPointControlStep) finalNotes = JSON.stringify(pointsState);
+
     onUpdateStep(selectedStep.id!, ProjectStatus.REJECTED, finalNotes);
   };
 
@@ -312,8 +343,8 @@ const ProjectWorkflow: React.FC<ProjectWorkflowProps> = ({
           </button>
           <div className="overflow-hidden">
             <div className="flex items-center gap-2 mb-1.5">
-              <span className="px-2 py-0.5 bg-primary/10 text-primary text-[8px] font-semibold uppercase tracking-[0.2em] rounded border border-primary/10">
-                PROJETO ATIVO
+              <span className="px-2 py-0.5 bg-primary text-white text-[8px] font-black uppercase tracking-[0.2em] rounded shadow-sm">
+                PROJETO #{project.project_number || '---'}
               </span>
               <span className="text-slate-muted text-[10px] font-medium uppercase tracking-widest pl-2 border-l border-border-light">
                 {service?.name}
@@ -407,7 +438,19 @@ const ProjectWorkflow: React.FC<ProjectWorkflowProps> = ({
             <div className="p-6 border-b border-border-light flex flex-col sm:flex-row sm:items-center justify-between gap-6">
               <div className="flex items-center gap-4">
                 <div className="w-14 h-14 bg-primary-surface border border-primary/10 rounded-2xl flex items-center justify-center text-primary shadow-inner shrink-0 group hover:scale-110 transition-transform duration-500">
-                  {React.cloneElement(WORKFLOW_STEPS_DEFINITION[selectedStepIndex]?.icon as React.ReactElement, { size: 28, className: 'animate-float' })}
+                  {(() => {
+                    const stepDef = isCarGo
+                      ? (CAR_WORKFLOW_STEPS_DEFINITION[selectedStepIndex] || CAR_WORKFLOW_STEPS_DEFINITION[0] || WORKFLOW_STEPS_DEFINITION[0])
+                      : (WORKFLOW_STEPS_DEFINITION[selectedStepIndex] || WORKFLOW_STEPS_DEFINITION[0]);
+
+                    if (!stepDef || !stepDef.icon) return <ClipboardCheck size={28} className="animate-float" />;
+
+                    try {
+                      return React.cloneElement(stepDef.icon as React.ReactElement, { size: 28, className: 'animate-float' });
+                    } catch (e) {
+                      return <ClipboardCheck size={28} className="animate-float" />;
+                    }
+                  })()}
                 </div>
                 <div className="overflow-hidden">
                   <h2 className="text-xl font-heading font-semibold text-slate-main tracking-tight truncate">{selectedStep.label}</h2>
@@ -470,7 +513,7 @@ const ProjectWorkflow: React.FC<ProjectWorkflowProps> = ({
                         onClick={() => setShowCoverPreview(true)}
                         className="flex items-center justify-center gap-3 px-6 py-3 bg-slate-main text-white rounded-2xl text-[10px] font-semibold uppercase tracking-[0.2em] hover:bg-slate-800 transition-all shadow-premium w-full sm:w-auto active:scale-95"
                       >
-                        <FileDown size={18} /> Gerar Capa
+                        <FileDown size={18} /> Gerar Checklist
                       </button>
                     )}
                   </div>
@@ -496,9 +539,9 @@ const ProjectWorkflow: React.FC<ProjectWorkflowProps> = ({
                 <div className="space-y-6 animate-in fade-in duration-700">
                   <div className="flex items-center justify-between px-1">
                     <label className="text-[10px] font-semibold text-slate-muted uppercase tracking-[0.3em]">
-                      {selectedStep.step_id === WorkflowStepId.BUDGET ? "Proposta Comercial" : "Inteligência & Notas"}
+                      {isPointControlStep ? "Registro de Pontos" : (selectedStep.step_id === WorkflowStepId.BUDGET ? "Proposta Comercial" : "Inteligência & Notas")}
                     </label>
-                    {isCriStep && (
+                    {(isCriStep || isPointControlStep) && (
                       <div className="flex items-center gap-2">
                         {isSavingNotes ? (
                           <span className="flex items-center gap-2 text-[10px] font-semibold text-amber-500 uppercase tracking-tighter bg-amber-50 px-3 py-1 rounded-lg">
@@ -513,7 +556,50 @@ const ProjectWorkflow: React.FC<ProjectWorkflowProps> = ({
                     )}
                   </div>
 
-                  {selectedStep.step_id === WorkflowStepId.BUDGET ? (
+                  {isPointControlStep ? (
+                    <div className="w-full min-h-[20rem] p-6 sm:p-8 bg-slate-50 border border-slate-100 rounded-[2rem] flex flex-col justify-center items-center gap-6 shadow-inner">
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6 w-full max-w-2xl">
+                        {/* Ponto M */}
+                        <div className="flex flex-col items-center gap-3 p-4 sm:p-6 bg-white rounded-3xl border border-slate-100 shadow-soft transition-all focus-within:ring-2 focus-within:ring-primary/20 focus-within:border-primary">
+                          <div className="w-12 h-12 bg-blue-50 text-blue-500 rounded-2xl flex items-center justify-center font-black text-xl shadow-inner">M</div>
+                          <label className="text-[10px] uppercase tracking-widest font-semibold text-slate-500">Pontos M</label>
+                          <input
+                            type="text"
+                            value={pointsState.m || ''}
+                            onChange={(e) => setPointsState(prev => ({ ...prev, m: e.target.value }))}
+                            className="w-full text-center text-sm sm:text-lg font-heading font-black text-slate-main bg-transparent outline-none placeholder:text-slate-200 break-all"
+                            placeholder="M-0000"
+                          />
+                        </div>
+
+                        {/* Ponto P */}
+                        <div className="flex flex-col items-center gap-3 p-4 sm:p-6 bg-white rounded-3xl border border-slate-100 shadow-soft transition-all focus-within:ring-2 focus-within:ring-primary/20 focus-within:border-primary">
+                          <div className="w-12 h-12 bg-emerald-50 text-emerald-500 rounded-2xl flex items-center justify-center font-black text-xl shadow-inner">P</div>
+                          <label className="text-[10px] uppercase tracking-widest font-semibold text-slate-500">Pontos P</label>
+                          <input
+                            type="text"
+                            value={pointsState.p || ''}
+                            onChange={(e) => setPointsState(prev => ({ ...prev, p: e.target.value }))}
+                            className="w-full text-center text-sm sm:text-lg font-heading font-black text-slate-main bg-transparent outline-none placeholder:text-slate-200 break-all"
+                            placeholder="P-0000"
+                          />
+                        </div>
+
+                        {/* Ponto V */}
+                        <div className="flex flex-col items-center gap-3 p-4 sm:p-6 bg-white rounded-3xl border border-slate-100 shadow-soft transition-all focus-within:ring-2 focus-within:ring-primary/20 focus-within:border-primary">
+                          <div className="w-12 h-12 bg-amber-50 text-amber-500 rounded-2xl flex items-center justify-center font-black text-xl shadow-inner">V</div>
+                          <label className="text-[10px] uppercase tracking-widest font-semibold text-slate-500">Pontos V</label>
+                          <input
+                            type="text"
+                            value={pointsState.v || ''}
+                            onChange={(e) => setPointsState(prev => ({ ...prev, v: e.target.value }))}
+                            className="w-full text-center text-sm sm:text-lg font-heading font-black text-slate-main bg-transparent outline-none placeholder:text-slate-200 break-all"
+                            placeholder="V-0000"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  ) : selectedStep.step_id === WorkflowStepId.BUDGET ? (
                     <div className="w-full h-80 p-8 bg-slate-50 border border-slate-100 rounded-[2rem] overflow-y-auto custom-scrollbar shadow-inner">
                       {(() => {
                         try {
@@ -666,7 +752,7 @@ const ProjectWorkflow: React.FC<ProjectWorkflowProps> = ({
       {showCoverPreview && (
         <DocumentPreview
           project={project}
-          step={{ ...selectedStep, label: 'Capa do Processo', notes: JSON.stringify(checklistState) }} // Pass checklist as notes
+          step={{ ...selectedStep, label: 'Documentação (Checklist)', notes: JSON.stringify(checklistState) }} // Pass checklist as notes
           client={client}
           property={property}
           professional={professional}

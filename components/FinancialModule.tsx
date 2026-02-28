@@ -95,6 +95,7 @@ const FinancialModule: React.FC<FinancialModuleProps> = ({
   const [showExpenseModal, setShowExpenseModal] = useState(false);
   const [showAccountModal, setShowAccountModal] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<FinancialTransaction | null>(null);
+  const [editingAccount, setEditingAccount] = useState<Account | null>(null);
   const [selectedCardId, setSelectedCardId] = useState<string | 'ALL'>('ALL');
 
   const [searchTerm, setSearchTerm] = useState('');
@@ -411,16 +412,49 @@ const FinancialModule: React.FC<FinancialModuleProps> = ({
     }
 
     onSaveAccount({
+      ...(editingAccount && { id: editingAccount.id }),
       name: newAccountFormData.name,
       type: newAccountFormData.type,
       initial_balance: parsedInitialBalance
-    });
+    }, editingAccount?.id);
     setShowAccountModal(false);
+    setEditingAccount(null);
     setNewAccountFormData({
       name: '',
       type: AccountType.CHECKING,
       initial_balance: ''
     });
+  };
+
+  const handleEditAccount = (account: Account) => {
+    setEditingAccount(account);
+    setNewAccountFormData({
+      name: account.name,
+      type: account.type,
+      initial_balance: String(account.initial_balance)
+    });
+    setShowAccountModal(true);
+  };
+
+  const handleDeleteAccountConfig = (id: string) => {
+    if (window.confirm('Tem certeza que deseja excluir esta conta? Isso não apagará as transações vinculadas, mas a conta não aparecerá mais nos filtros e relatórios.')) {
+      onDeleteAccount(id);
+    }
+  };
+
+  const calculateAccountBalance = (account: Account) => {
+    const accountTransactions = transactions.filter(t =>
+      t.status === TransactionStatus.PAID &&
+      (t.account === account.id || t.account === account.name)
+    );
+
+    const balanceChange = accountTransactions.reduce((acc, t) => {
+      if (t.type === TransactionType.INCOME) return acc + parseFloat(String(t.amount));
+      if (t.type === TransactionType.EXPENSE) return acc - parseFloat(String(t.amount));
+      return acc;
+    }, 0);
+
+    return account.initial_balance + balanceChange;
   };
 
   const handleGenerateReport = () => {
@@ -511,7 +545,11 @@ const FinancialModule: React.FC<FinancialModuleProps> = ({
               <Plus size={16} /> {activeTab === 'FLUXO' ? 'Novo Lançamento' : 'Nova Despesa Card'}
             </button>
             <button
-              onClick={() => setShowAccountModal(true)}
+              onClick={() => {
+                setEditingAccount(null);
+                setNewAccountFormData({ name: '', type: AccountType.CHECKING, initial_balance: '' });
+                setShowAccountModal(true);
+              }}
               className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 shadow-md shadow-blue-200/50 text-[10px] sm:text-xs font-bold transition-all"
             >
               <Plus size={16} /> Nova Conta
@@ -537,14 +575,38 @@ const FinancialModule: React.FC<FinancialModuleProps> = ({
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {accounts.length > 0 ? (
                   accounts.map(account => (
-                    <div key={account.id} className="bg-slate-50 p-4 rounded-lg border border-slate-200 flex flex-col justify-between">
+                    <div key={account.id} className="bg-slate-50 p-4 rounded-lg border border-slate-200 flex flex-col justify-between group relative overflow-hidden">
+                      <div className="absolute top-2 right-2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity bg-white/80 p-1 rounded-lg backdrop-blur-sm border border-slate-200 shadow-sm">
+                        <button
+                          onClick={() => handleEditAccount(account)}
+                          className="p-1.5 text-slate-400 hover:text-blue-500 rounded-md transition-colors"
+                          title="Editar conta"
+                        >
+                          <FileText size={14} />
+                        </button>
+                        <button
+                          onClick={() => handleDeleteAccountConfig(account.id)}
+                          className="p-1.5 text-slate-400 hover:text-rose-500 rounded-md transition-colors"
+                          title="Excluir conta"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
                       <div>
                         <p className="text-xs text-slate-500">{account.type}</p>
-                        <p className="font-bold text-slate-800 text-lg">{account.name}</p>
+                        <p className="font-bold text-slate-800 text-lg pr-12">{account.name}</p>
                       </div>
-                      <div className="mt-2">
-                        <p className="text-sm text-slate-600">Saldo Inicial:</p>
-                        <p className="font-semibold text-slate-700">{formatCurrency(account.initial_balance)}</p>
+                      <div className="mt-2 space-y-1">
+                        <div className="flex justify-between items-center text-xs text-slate-500">
+                          <span>Saldo Inicial:</span>
+                          <span>{formatCurrency(account.initial_balance)}</span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm font-bold text-slate-600">Saldo Atual:</span>
+                          <span className={`font-black ${calculateAccountBalance(account) >= 0 ? 'text-primary' : 'text-rose-600'}`}>
+                            {formatCurrency(calculateAccountBalance(account))}
+                          </span>
+                        </div>
                       </div>
                     </div>
                   ))
@@ -667,7 +729,9 @@ const FinancialModule: React.FC<FinancialModuleProps> = ({
                             <p className="text-[10px] text-slate-400 font-bold uppercase">{t.category}</p>
                             {t.notes && <p className="text-[9px] text-slate-400 mt-1">{t.notes}</p>}
                           </td>
-                          <td className="px-6 py-4 text-[10px] font-bold text-slate-600 whitespace-nowrap">{t.account || '-'}</td>
+                          <td className="px-6 py-4 text-[10px] font-bold text-slate-600 whitespace-nowrap">
+                            {accounts.find(a => a.id === t.account)?.name || t.account || '-'}
+                          </td>
                           <td className="px-6 py-4">
                             <button
                               onClick={() => onSaveTransaction({ id: t.id, scope: t.scope === 'Pessoal' ? 'Empresa' : 'Pessoal' }, t.id)}
@@ -1191,8 +1255,8 @@ const FinancialModule: React.FC<FinancialModuleProps> = ({
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-400/10 backdrop-blur-md overflow-y-auto">
           <div className="bg-white rounded-3xl w-full max-w-md shadow-2xl overflow-hidden animate-in zoom-in duration-300 relative my-auto">
             <div className="p-6 bg-slate-50 border-b border-slate-200 flex items-center justify-between shrink-0">
-              <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest">Nova Conta</h3>
-              <button onClick={() => setShowAccountModal(false)} className="p-2 text-slate-400 hover:text-rose-500 rounded-full transition-all">
+              <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest">{editingAccount ? 'Editar Conta' : 'Nova Conta'}</h3>
+              <button onClick={() => { setShowAccountModal(false); setEditingAccount(null); }} className="p-2 text-slate-400 hover:text-rose-500 rounded-full transition-all">
                 <X size={20} />
               </button>
             </div>

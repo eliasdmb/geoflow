@@ -68,6 +68,21 @@ export const isValidCpfOrCnpj = (value: string): boolean => {
   return false;
 };
 
+export const computeNextProjectNumber = (projects: { project_number?: string; created_at: string }[]): string => {
+  const currentYear = new Date().getFullYear();
+  let maxSeq = 0;
+  for (const p of projects) {
+    if (!p.project_number) continue;
+    const match = /^(\d{1,6})\/(\d{4})/.exec(p.project_number.trim());
+    if (match) {
+      const seq = parseInt(match[1], 10);
+      const year = parseInt(match[2], 10);
+      if (year === currentYear && seq > maxSeq) maxSeq = seq;
+    }
+  }
+  return `${(maxSeq + 1).toString().padStart(4, '0')}/${currentYear}`;
+};
+
 export const formatDate = (date: string | Date | null | undefined): string => {
   if (!date) return '-';
   const d = new Date(date);

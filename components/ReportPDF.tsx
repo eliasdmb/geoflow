@@ -23,7 +23,6 @@ const styles = StyleSheet.create({
     color: '#555',
   },
   table: {
-    display: 'table',
     width: 'auto',
     marginBottom: 10,
     borderStyle: 'solid',
