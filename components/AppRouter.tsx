@@ -1,6 +1,6 @@
 // components/AppRouter.tsx
 import React from 'react';
-import { ViewState, Project, Client, RuralProperty, Professional, Service, Registry, SigefCertification, BudgetItemTemplate, FinancialTransaction, Appointment, CreditCard, CreditCardExpense, ProjectStatus, Account, WorkflowStepId } from '../types';
+import { ViewState, Project, Client, RuralProperty, Professional, Service, Registry, SigefCertification, BudgetItemTemplate, FinancialTransaction, Appointment, CreditCard, CreditCardExpense, ProjectStatus, Account, WorkflowStepId, UserTask } from '../types';
 import { WORKFLOW_STEPS_DEFINITION, CAR_WORKFLOW_STEPS_DEFINITION } from '../constants';
 import { supabase } from '../lib/supabase';
 import Dashboard from './Dashboard';
@@ -35,6 +35,7 @@ interface AppRouterProps {
   budgetItemTemplates: BudgetItemTemplate[];
   transactions: FinancialTransaction[];
   appointments: Appointment[];
+  tasks: UserTask[];
   creditCards: CreditCard[];
   creditCardExpenses: CreditCardExpense[];
   accounts: Account[];
@@ -78,6 +79,7 @@ const AppRouter: React.FC<AppRouterProps> = ({
   budgetItemTemplates,
   transactions,
   appointments,
+  tasks,
   creditCards,
   creditCardExpenses,
   accounts,
@@ -215,10 +217,13 @@ const AppRouter: React.FC<AppRouterProps> = ({
       case 'FINANCIAL_REPORT': return <FinancialReport transactions={transactions} projects={projects} />;
       case 'CALENDAR': return <CalendarView
         appointments={appointments}
+        tasks={tasks}
         clients={clients}
         projects={projects}
         onSaveAppointment={(a, id) => handleUpsert('appointments', a, fetchInitialData, id)}
         onDeleteAppointment={(id) => handleDelete('appointments', id)}
+        onSaveTask={(t, id) => handleUpsert('user_tasks', t, fetchInitialData, id)}
+        onDeleteTask={(id) => handleDelete('user_tasks', id)}
       />;
       case 'PROFILE': return <ProfileSettings />;
       default: return <Dashboard

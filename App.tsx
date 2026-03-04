@@ -42,7 +42,8 @@ import {
   CreditCard,
   CreditCardExpense,
   Account,
-  TransactionType
+  TransactionType,
+  UserTask
 } from './types';
 import { WORKFLOW_STEPS_DEFINITION, CAR_WORKFLOW_STEPS_DEFINITION } from './constants';
 import { supabase, checkSupabaseConnection } from './lib/supabase';
@@ -131,6 +132,7 @@ const App: React.FC = () => {
   const [creditCards, setCreditCards] = useState<CreditCard[]>([]);
   const [creditCardExpenses, setCreditCardExpenses] = useState<CreditCardExpense[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
+  const [tasks, setTasks] = useState<UserTask[]>([]);
 
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   // Initialize sidebar based on window width if available, otherwise default to true (desktop)
@@ -219,7 +221,8 @@ const App: React.FC = () => {
             appointmentsResponse,
             creditCardsResponse,
             creditCardExpensesResponse,
-            accountsResponse
+            accountsResponse,
+            tasksResponse
           ] = await Promise.all([
             supabase.from('financial_transactions').select('*').eq('user_id', uid).order('due_date', { ascending: false }),
             supabase.from('properties').select('*').eq('user_id', uid),
@@ -231,7 +234,8 @@ const App: React.FC = () => {
             supabase.from('appointments').select('*').eq('user_id', uid),
             supabase.from('credit_cards').select('*').eq('user_id', uid),
             supabase.from('credit_card_expenses').select('*').eq('user_id', uid),
-            supabase.from('accounts').select('*').eq('user_id', uid)
+            supabase.from('accounts').select('*').eq('user_id', uid),
+            supabase.from('user_tasks').select('*').eq('user_id', uid).order('deadline', { ascending: true })
           ]);
 
           setTransactions(financialTransactionsResponse.data || []);
@@ -246,6 +250,7 @@ const App: React.FC = () => {
           setCreditCards(creditCardsResponse.data || []);
           setCreditCardExpenses(creditCardExpensesResponse.data || []);
           setAccounts(accountsResponse.data || []);
+          setTasks(tasksResponse.data || []);
 
           // Notificações de compromissos
           const hasNotifiedRef = (window as any)._hasNotifiedToday;
@@ -673,6 +678,7 @@ const App: React.FC = () => {
                 budgetItemTemplates={budgetItemTemplates}
                 transactions={transactions}
                 appointments={appointments}
+                tasks={tasks}
                 creditCards={creditCards}
                 creditCardExpenses={creditCardExpenses}
                 user={user}

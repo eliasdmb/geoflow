@@ -220,6 +220,17 @@ export interface Appointment {
   updated_at: string;
 }
 
+export interface UserTask {
+  id: string;
+  user_id: string;
+  title: string;
+  description?: string;
+  deadline?: string;
+  status: 'pending' | 'completed';
+  created_at: string;
+  updated_at: string;
+}
+
 export interface CreditCard {
   id: string;
   user_id: string;
