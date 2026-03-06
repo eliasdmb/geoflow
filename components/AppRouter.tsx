@@ -1,6 +1,6 @@
 // components/AppRouter.tsx
 import React from 'react';
-import { ViewState, Project, Client, RuralProperty, Professional, Service, Registry, SigefCertification, BudgetItemTemplate, FinancialTransaction, Appointment, CreditCard, CreditCardExpense, ProjectStatus, Account, WorkflowStepId, UserTask } from '../types';
+import { ViewState, Project, Client, RuralProperty, Professional, Service, Registry, SigefCertification, BudgetItemTemplate, FinancialTransaction, Appointment, CreditCard, CreditCardExpense, ProjectStatus, Account, WorkflowStepId, UserTask, ProjectExpense } from '../types';
 import { WORKFLOW_STEPS_DEFINITION, CAR_WORKFLOW_STEPS_DEFINITION } from '../constants';
 import { supabase } from '../lib/supabase';
 import Dashboard from './Dashboard';
@@ -62,6 +62,9 @@ interface AppRouterProps {
   handleDelete: (table: string, id: string) => Promise<void>;
   updateProjectStep: (stepDbId: string, projectId: string, newStatus: ProjectStatus, notes?: string, document_number?: string) => Promise<void>;
   handleSaveAccount: (account: Partial<Account>, id?: string) => Promise<void>;
+  projectExpenses: ProjectExpense[];
+  onAddExpense: (expense: Omit<ProjectExpense, 'id' | 'created_at'>) => Promise<void>;
+  onDeleteExpense: (id: string) => Promise<void>;
 }
 
 const AppRouter: React.FC<AppRouterProps> = ({
@@ -95,6 +98,9 @@ const AppRouter: React.FC<AppRouterProps> = ({
   handleDelete,
   updateProjectStep,
   handleSaveAccount,
+  projectExpenses,
+  onAddExpense,
+  onDeleteExpense,
 }) => {
   const currentProject = projects.find(p => p.id === selectedProjectId);
 
@@ -204,6 +210,9 @@ const AppRouter: React.FC<AppRouterProps> = ({
             onBack={() => setCurrentView('PROJECTS')}
             isAdmin={role === 'admin'}
             onCreateTransaction={(t) => handleUpsert('financial_transactions', t, fetchInitialData)}
+            projectExpenses={projectExpenses.filter(e => e.project_id === currentProject.id)}
+            onAddExpense={onAddExpense}
+            onDeleteExpense={onDeleteExpense}
           />
         );
       }

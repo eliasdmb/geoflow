@@ -43,7 +43,8 @@ import {
   CreditCardExpense,
   Account,
   TransactionType,
-  UserTask
+  UserTask,
+  ProjectExpense
 } from './types';
 import { WORKFLOW_STEPS_DEFINITION, CAR_WORKFLOW_STEPS_DEFINITION } from './constants';
 import { supabase, checkSupabaseConnection } from './lib/supabase';
@@ -133,6 +134,7 @@ const App: React.FC = () => {
   const [creditCardExpenses, setCreditCardExpenses] = useState<CreditCardExpense[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [tasks, setTasks] = useState<UserTask[]>([]);
+  const [projectExpenses, setProjectExpenses] = useState<ProjectExpense[]>([]);
 
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   // Initialize sidebar based on window width if available, otherwise default to true (desktop)
@@ -222,7 +224,8 @@ const App: React.FC = () => {
             creditCardsResponse,
             creditCardExpensesResponse,
             accountsResponse,
-            tasksResponse
+            tasksResponse,
+            projectExpensesResponse
           ] = await Promise.all([
             supabase.from('financial_transactions').select('*').eq('user_id', uid).order('due_date', { ascending: false }),
             supabase.from('properties').select('*').eq('user_id', uid),
@@ -235,7 +238,8 @@ const App: React.FC = () => {
             supabase.from('credit_cards').select('*').eq('user_id', uid),
             supabase.from('credit_card_expenses').select('*').eq('user_id', uid),
             supabase.from('accounts').select('*').eq('user_id', uid),
-            supabase.from('user_tasks').select('*').eq('user_id', uid).order('deadline', { ascending: true })
+            supabase.from('user_tasks').select('*').eq('user_id', uid).order('deadline', { ascending: true }),
+            supabase.from('project_expenses').select('*').eq('user_id', uid).order('date', { ascending: false })
           ]);
 
           setTransactions(financialTransactionsResponse.data || []);
@@ -251,6 +255,7 @@ const App: React.FC = () => {
           setCreditCardExpenses(creditCardExpensesResponse.data || []);
           setAccounts(accountsResponse.data || []);
           setTasks(tasksResponse.data || []);
+          setProjectExpenses(projectExpensesResponse.data || []);
 
           // Notificações de compromissos
           const hasNotifiedRef = (window as any)._hasNotifiedToday;
@@ -492,6 +497,7 @@ const App: React.FC = () => {
         await supabase.from('appointments').delete().eq('project_id', id).eq('user_id', uid);
         await supabase.from('financial_transactions').delete().eq('project_id', id).eq('user_id', uid);
         await supabase.from('credit_card_expenses').delete().eq('project_id', id).eq('user_id', uid);
+        await supabase.from('project_expenses').delete().eq('project_id', id).eq('user_id', uid);
       }
 
       const { error } = await supabase.from(table).delete().eq('id', id).eq('user_id', uid);
@@ -623,6 +629,38 @@ const App: React.FC = () => {
     await handleUpsert('accounts', account, fetchInitialData, id);
   };
 
+  const handleAddExpense = async (expense: Omit<ProjectExpense, 'id' | 'created_at'>) => {
+    const uid = userIdRef.current;
+    if (!uid) return;
+    const endProgress = simulateProgress();
+    try {
+      const { error } = await supabase.from('project_expenses').insert({ ...expense, user_id: uid });
+      if (error) throw error;
+      showNotification('Despesa adicionada com sucesso!');
+      fetchInitialData(uid);
+    } catch (err: any) {
+      showNotification(`Falha ao adicionar despesa: ${extractErrorMessage(err)}`, 'error');
+    } finally {
+      endProgress();
+    }
+  };
+
+  const handleDeleteExpense = async (id: string) => {
+    const uid = userIdRef.current;
+    if (!uid) return;
+    const endProgress = simulateProgress();
+    try {
+      const { error } = await supabase.from('project_expenses').delete().eq('id', id).eq('user_id', uid);
+      if (error) throw error;
+      showNotification('Despesa removida.');
+      fetchInitialData(uid);
+    } catch (err: any) {
+      showNotification(`Falha ao remover despesa: ${extractErrorMessage(err)}`, 'error');
+    } finally {
+      endProgress();
+    }
+  };
+
   return (
     <div className="flex h-screen bg-bg-main overflow-hidden">
       <Sidebar
@@ -694,6 +732,9 @@ const App: React.FC = () => {
                 updateProjectStep={updateProjectStep}
                 handleSaveAccount={handleSaveAccount}
                 accounts={accounts}
+                projectExpenses={projectExpenses}
+                onAddExpense={handleAddExpense}
+                onDeleteExpense={handleDeleteExpense}
               />
             </div>
           </div>

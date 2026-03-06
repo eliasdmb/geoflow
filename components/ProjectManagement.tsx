@@ -71,6 +71,11 @@ const ProjectManagement: React.FC<ProjectManagementProps> = ({
 
   const isCarSelected = services.find(s => s.id === formData.serviceId)?.name?.toUpperCase().includes('CAR');
 
+  // Filter properties by selected client
+  const filteredProperties = formData.clientId
+    ? properties.filter(p => p.client_id === formData.clientId)
+    : properties;
+
   const nextProjectNumber = computeNextProjectNumber(projects);
 
 
@@ -414,16 +419,16 @@ const ProjectManagement: React.FC<ProjectManagementProps> = ({
                       <div className="grid grid-cols-2 gap-4">
                         <div>
                           <label className="block text-[11px] font-bold text-slate-800 uppercase tracking-wider mb-2">Cliente *</label>
-                          <select required className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40 transition-all font-medium text-slate-700" value={formData.clientId} onChange={e => setFormData({ ...formData, clientId: e.target.value })}>
+                          <select required className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40 transition-all font-medium text-slate-700" value={formData.clientId} onChange={e => setFormData({ ...formData, clientId: e.target.value, propertyId: '' })}>
                             <option value="">Selecione...</option>
                             {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                           </select>
                         </div>
                         <div>
                           <label className="block text-[11px] font-bold text-slate-800 uppercase tracking-wider mb-2">Imóvel *</label>
-                          <select required className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40 transition-all font-medium text-slate-700" value={formData.propertyId} onChange={e => setFormData({ ...formData, propertyId: e.target.value })}>
-                            <option value="">Selecione...</option>
-                            {properties.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                          <select required className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40 transition-all font-medium text-slate-700" value={formData.propertyId} onChange={e => setFormData({ ...formData, propertyId: e.target.value })} disabled={!formData.clientId}>
+                            <option value="">{formData.clientId ? (filteredProperties.length === 0 ? 'Nenhum imóvel cadastrado' : 'Selecione...') : 'Selecione um cliente primeiro'}</option>
+                            {filteredProperties.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                           </select>
                         </div>
                       </div>
@@ -456,16 +461,16 @@ const ProjectManagement: React.FC<ProjectManagementProps> = ({
                       <div className="grid grid-cols-2 gap-4">
                         <div>
                           <label className="block text-sm font-semibold text-slate-700 mb-1">Cliente</label>
-                          <select required className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-primary/20 outline-none" value={formData.clientId} onChange={e => setFormData({ ...formData, clientId: e.target.value })}>
+                          <select required className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-primary/20 outline-none" value={formData.clientId} onChange={e => setFormData({ ...formData, clientId: e.target.value, propertyId: '' })}>
                             <option value="">Selecione...</option>
                             {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                           </select>
                         </div>
                         <div>
                           <label className="block text-sm font-semibold text-slate-700 mb-1">Imóvel</label>
-                          <select required className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-primary/20 outline-none" value={formData.propertyId} onChange={e => setFormData({ ...formData, propertyId: e.target.value })}>
-                            <option value="">Selecione...</option>
-                            {properties.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                          <select required className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-primary/20 outline-none" value={formData.propertyId} onChange={e => setFormData({ ...formData, propertyId: e.target.value })} disabled={!formData.clientId}>
+                            <option value="">{formData.clientId ? (filteredProperties.length === 0 ? 'Nenhum imóvel cadastrado' : 'Selecione...') : 'Selecione um cliente primeiro'}</option>
+                            {filteredProperties.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                           </select>
                         </div>
                       </div>

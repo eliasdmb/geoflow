@@ -28,9 +28,12 @@ import {
   MessageCircle,
   ExternalLink,
   Save,
-  CloudCheck
+  CloudCheck,
+  Receipt,
+  Trash2,
+  Plus
 } from 'lucide-react';
-import { Project, Client, RuralProperty, Professional, WorkflowStepId, ProjectStatus, SigefCertification, Service, BudgetItemTemplate, Registry, FinancialTransaction } from '../types';
+import { Project, Client, RuralProperty, Professional, WorkflowStepId, ProjectStatus, SigefCertification, Service, BudgetItemTemplate, Registry, FinancialTransaction, ProjectExpense } from '../types';
 import { WORKFLOW_STEPS_DEFINITION, CAR_WORKFLOW_STEPS_DEFINITION } from '../constants';
 import DocumentPreview from './DocumentPreview';
 
@@ -54,6 +57,9 @@ interface ProjectWorkflowProps {
   isAdmin: boolean;
   userName: string;
   onCreateTransaction: (transaction: Partial<FinancialTransaction>) => void;
+  projectExpenses: ProjectExpense[];
+  onAddExpense: (expense: Omit<ProjectExpense, 'id' | 'created_at'>) => Promise<void>;
+  onDeleteExpense: (id: string) => Promise<void>;
 }
 
 const MONTIVIDIU_CNS = '02.456-1';
@@ -126,7 +132,10 @@ const ProjectWorkflow: React.FC<ProjectWorkflowProps> = ({
   onBack,
   isAdmin,
   userName,
-  onCreateTransaction
+  onCreateTransaction,
+  projectExpenses,
+  onAddExpense,
+  onDeleteExpense
 }) => {
   const steps = project.steps || [];
 
@@ -146,6 +155,8 @@ const ProjectWorkflow: React.FC<ProjectWorkflowProps> = ({
   const [hasTriedInit, setHasTriedInit] = useState(false);
   const [checklistState, setChecklistState] = useState<Record<string, boolean>>({});
   const [pointsState, setPointsState] = useState({ m: '', p: '', v: '' });
+  const [newExpense, setNewExpense] = useState({ date: '', item: '', amount: '' });
+  const [isAddingExpense, setIsAddingExpense] = useState(false);
 
   const autoSaveTimeoutRef = useRef<number | null>(null);
 
@@ -710,6 +721,145 @@ const ProjectWorkflow: React.FC<ProjectWorkflowProps> = ({
           </div>
         </div>
       </div>
+
+      {/* ===================== SEÇÃO DE DESPESAS ===================== */}
+      <div className="mt-2 animate-in fade-in slide-in-from-bottom-4 duration-700">
+        <div className="bg-white rounded-3xl border border-slate-200 overflow-hidden shadow-sm">
+          <div className="p-5 border-b border-slate-100 flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-rose-50 text-rose-500 rounded-2xl flex items-center justify-center shadow-inner shrink-0">
+                <Receipt size={20} />
+              </div>
+              <div>
+                <h3 className="text-sm font-semibold text-slate-800 tracking-tight">Despesas do Projeto</h3>
+                <p className="text-[10px] text-slate-400 font-medium uppercase tracking-widest">
+                  {projectExpenses.length} {projectExpenses.length === 1 ? 'registro' : 'registros'}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 px-4 py-2 bg-rose-50 border border-rose-100 rounded-2xl">
+              <span className="text-[10px] font-semibold text-rose-400 uppercase tracking-widest hidden sm:block">Total</span>
+              <span className="text-sm font-bold text-rose-600 tracking-tight">
+                R$ {projectExpenses.reduce((acc, e) => acc + (e.amount || 0), 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+              </span>
+            </div>
+          </div>
+
+          <div className="p-5 bg-slate-50/50 border-b border-slate-100">
+            <div className="flex flex-col sm:flex-row gap-3 items-end">
+              <div className="flex flex-col gap-1 flex-shrink-0">
+                <label className="text-[9px] font-semibold text-slate-400 uppercase tracking-widest px-1">Data</label>
+                <input
+                  type="date"
+                  value={newExpense.date}
+                  onChange={e => setNewExpense(prev => ({ ...prev, date: e.target.value }))}
+                  className="h-10 px-3 bg-white border border-slate-200 rounded-xl text-xs font-medium text-slate-700 outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40 transition-all w-full sm:w-40"
+                />
+              </div>
+              <div className="flex flex-col gap-1 flex-1 min-w-0">
+                <label className="text-[9px] font-semibold text-slate-400 uppercase tracking-widest px-1">Item / Descrição</label>
+                <input
+                  type="text"
+                  placeholder="Ex: Combustível, ART, etc."
+                  value={newExpense.item}
+                  onChange={e => setNewExpense(prev => ({ ...prev, item: e.target.value }))}
+                  className="h-10 px-3 bg-white border border-slate-200 rounded-xl text-xs font-medium text-slate-700 outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40 transition-all w-full"
+                />
+              </div>
+              <div className="flex flex-col gap-1 flex-shrink-0">
+                <label className="text-[9px] font-semibold text-slate-400 uppercase tracking-widest px-1">Valor (R$)</label>
+                <input
+                  type="number"
+                  placeholder="0,00"
+                  min="0"
+                  step="0.01"
+                  value={newExpense.amount}
+                  onChange={e => setNewExpense(prev => ({ ...prev, amount: e.target.value }))}
+                  className="h-10 px-3 bg-white border border-slate-200 rounded-xl text-xs font-medium text-slate-700 outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40 transition-all w-full sm:w-36"
+                />
+              </div>
+              <button
+                disabled={isAddingExpense || !newExpense.date || !newExpense.item || !newExpense.amount}
+                onClick={async () => {
+                  if (!newExpense.date || !newExpense.item || !newExpense.amount) return;
+                  setIsAddingExpense(true);
+                  try {
+                    await onAddExpense({
+                      user_id: '',
+                      project_id: project.id,
+                      date: newExpense.date,
+                      item: newExpense.item.trim(),
+                      amount: parseFloat(newExpense.amount)
+                    });
+                    setNewExpense({ date: '', item: '', amount: '' });
+                  } finally {
+                    setIsAddingExpense(false);
+                  }
+                }}
+                className="h-10 px-5 bg-primary text-white rounded-xl text-[10px] font-bold uppercase tracking-widest shadow-md shadow-primary/20 hover:bg-primary-dark transition-all active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2 shrink-0 whitespace-nowrap"
+              >
+                {isAddingExpense ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
+                Adicionar
+              </button>
+            </div>
+          </div>
+
+          {projectExpenses.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-12 text-center">
+              <div className="w-12 h-12 bg-slate-50 text-slate-300 rounded-2xl flex items-center justify-center mb-3 shadow-inner">
+                <Receipt size={22} />
+              </div>
+              <p className="text-xs text-slate-400 font-medium">Nenhuma despesa registrada para este projeto.</p>
+              <p className="text-[10px] text-slate-300 mt-1">Preencha o formulário acima e clique em Adicionar.</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="border-b border-slate-100">
+                    <th className="text-left px-5 py-3 text-[9px] font-semibold text-slate-400 uppercase tracking-widest w-36">Data</th>
+                    <th className="text-left px-5 py-3 text-[9px] font-semibold text-slate-400 uppercase tracking-widest">Item</th>
+                    <th className="text-right px-5 py-3 text-[9px] font-semibold text-slate-400 uppercase tracking-widest w-36">Valor</th>
+                    <th className="px-5 py-3 w-12"></th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-50">
+                  {projectExpenses.map((expense) => (
+                    <tr key={expense.id} className="group hover:bg-slate-50/60 transition-colors">
+                      <td className="px-5 py-3.5 text-slate-500 font-medium whitespace-nowrap">
+                        {new Date(expense.date + 'T00:00:00').toLocaleDateString('pt-BR')}
+                      </td>
+                      <td className="px-5 py-3.5 text-slate-700 font-medium">{expense.item}</td>
+                      <td className="px-5 py-3.5 text-right font-semibold text-slate-800 whitespace-nowrap">
+                        R$ {expense.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                      </td>
+                      <td className="px-5 py-3.5 text-right">
+                        <button
+                          onClick={() => onDeleteExpense(expense.id)}
+                          className="w-7 h-7 flex items-center justify-center text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-all opacity-0 group-hover:opacity-100"
+                          title="Excluir despesa"
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr className="border-t-2 border-slate-100 bg-slate-50/80">
+                    <td colSpan={2} className="px-5 py-3.5 text-[10px] font-semibold text-slate-500 uppercase tracking-widest">Total Geral</td>
+                    <td className="px-5 py-3.5 text-right font-bold text-rose-600 text-sm tracking-tight whitespace-nowrap">
+                      R$ {projectExpenses.reduce((acc, e) => acc + (e.amount || 0), 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                    </td>
+                    <td></td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          )}
+        </div>
+      </div>
+      {/* ============================================================ */}
 
       {showDocPreview && (
         <DocumentPreview

@@ -272,4 +272,14 @@ export interface Account {
   created_at: string;
 }
 
+export interface ProjectExpense {
+  id: string;
+  user_id: string;
+  project_id: string;
+  date: string;
+  item: string;
+  amount: number;
+  created_at: string;
+}
+
 export type ViewState = 'DASHBOARD' | 'PROJECTS' | 'CLIENTS' | 'PROPERTIES' | 'PROFESSIONALS' | 'REGISTRIES' | 'SIGEF_CERTIFICATIONS' | 'SERVICES' | 'BUDGET_TEMPLATES' | 'PROJECT_DETAILS' | 'FINANCIAL' | 'CALENDAR' | 'FINANCIAL_REPORT';
