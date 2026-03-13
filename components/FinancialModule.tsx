@@ -48,6 +48,7 @@ import {
   Line,
   Legend
 } from 'recharts';
+import DREPDF from './DREPDF';
 import { PDFDownloadLink } from '@react-pdf/renderer';
 import ReportPDF from './ReportPDF';
 
@@ -88,8 +89,10 @@ const FinancialModule: React.FC<FinancialModuleProps> = ({
   onDeleteAccount,
   accounts
 }) => {
-  const [activeTab, setActiveTab] = useState<'FLUXO' | 'CARTOES' | 'RELATORIOS'>('FLUXO');
+  const [activeTab, setActiveTab] = useState<'FLUXO' | 'CARTOES' | 'RELATORIOS' | 'DRE'>('FLUXO');
   const [balanceMode, setBalanceMode] = useState<'EFETIVADO' | 'PROJETADO'>('EFETIVADO');
+  const [dreYear, setDreYear] = useState(new Date().getFullYear().toString());
+  const [dreScope, setDreScope] = useState<'ALL' | 'Pessoal' | 'Empresa'>('Empresa');
   const [showModal, setShowModal] = useState(false);
   const [showCardModal, setShowCardModal] = useState(false);
   const [showExpenseModal, setShowExpenseModal] = useState(false);
@@ -284,6 +287,75 @@ const FinancialModule: React.FC<FinancialModuleProps> = ({
       return matchesSearch && matchesType && matchesStatus && matchesProject && matchesScope;
     });
   }, [transactions, searchTerm, typeFilter, statusFilter, projectFilter, scopeFilter]);
+
+  const dreData = useMemo(() => {
+    const categoriesFilter = {
+      REVENUE: ['serviço', 'honorário', 'venda', 'receita', 'projeto'],
+      DEDUCTIONS: ['imposto', 'iss', 'ir', 'taxa', 'dedução'],
+      COSTS: ['custo', 'insumo', 'deslocamento', 'combustível', 'obra'],
+      PERSONNEL: ['salário', 'pró-labore', 'folha', 'encargos', 'fgts'],
+      FINANCIAL: ['juros', 'bancária', 'empréstimo']
+    };
+
+    const structure = {
+      revenueBruta: Array(12).fill(0),
+      deductions: Array(12).fill(0),
+      costs: Array(12).fill(0),
+      personnel: Array(12).fill(0),
+      financial: Array(12).fill(0),
+      operatingExpenses: Array(12).fill(0),
+      otherIncome: Array(12).fill(0),
+      otherExpenses: Array(12).fill(0),
+    };
+
+    const details = {
+      revenue: {} as Record<string, number[]>,
+      operating: {} as Record<string, number[]>,
+    };
+
+    transactions
+      .filter(t => t.status === TransactionStatus.PAID)
+      .filter(t => {
+        const date = new Date(t.due_date);
+        return date.getFullYear().toString() === dreYear;
+      })
+      .filter(t => {
+        if (dreScope === 'ALL') return true;
+        return (t.scope || 'Empresa') === dreScope;
+      })
+      .forEach(t => {
+        const date = new Date(t.due_date);
+        const month = date.getMonth();
+        const amount = parseFloat(String(t.amount)) || 0;
+        const cat = t.category.toLowerCase();
+
+        if (t.type === TransactionType.INCOME) {
+          if (categoriesFilter.REVENUE.some(k => cat.includes(k))) {
+            structure.revenueBruta[month] += amount;
+            if (!details.revenue[t.category]) details.revenue[t.category] = Array(12).fill(0);
+            details.revenue[t.category][month] += amount;
+          } else {
+            structure.otherIncome[month] += amount;
+          }
+        } else if (t.type === TransactionType.EXPENSE) {
+          if (categoriesFilter.DEDUCTIONS.some(k => cat.includes(k))) {
+            structure.deductions[month] += amount;
+          } else if (categoriesFilter.COSTS.some(k => cat.includes(k))) {
+            structure.costs[month] += amount;
+          } else if (categoriesFilter.PERSONNEL.some(k => cat.includes(k))) {
+            structure.personnel[month] += amount;
+          } else if (categoriesFilter.FINANCIAL.some(k => cat.includes(k))) {
+            structure.financial[month] += amount;
+          } else {
+            structure.operatingExpenses[month] += amount;
+            if (!details.operating[t.category]) details.operating[t.category] = Array(12).fill(0);
+            details.operating[t.category][month] += amount;
+          }
+        }
+      });
+
+    return { structure, details };
+  }, [transactions, dreYear, dreScope]);
 
   const handleEditTransaction = (transaction: FinancialTransaction) => {
     setEditingTransaction(transaction);
@@ -501,6 +573,12 @@ const FinancialModule: React.FC<FinancialModuleProps> = ({
               className={`px-3 sm:px-4 py-1.5 rounded-lg text-[10px] sm:text-xs font-bold transition-all ${activeTab === 'RELATORIOS' ? 'bg-white text-primary shadow-sm border border-slate-200/40' : 'text-slate-500 hover:text-slate-700'}`}
             >
               Relatórios
+            </button>
+            <button
+              onClick={() => setActiveTab('DRE')}
+              className={`px-3 sm:px-4 py-1.5 rounded-lg text-[10px] sm:text-xs font-bold transition-all ${activeTab === 'DRE' ? 'bg-white text-primary shadow-sm border border-slate-200/40' : 'text-slate-500 hover:text-slate-700'}`}
+            >
+              DRE
             </button>
           </div>
           <div className="flex flex-wrap bg-slate-100/50 p-1 rounded-xl border border-slate-200/60">
@@ -843,95 +921,151 @@ const FinancialModule: React.FC<FinancialModuleProps> = ({
       }
 
       {
-        activeTab === 'RELATORIOS' && (
+        activeTab === 'DRE' && (
           <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-500">
-            <div className="bg-white p-6 rounded-2xl border border-slate-200/40 shadow-sm">
-              <h3 className="text-lg font-bold text-slate-800 mb-4">Gerar Relatório Personalizado</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Data de Início</label>
-                  <input type="date" className="w-full p-3 bg-slate-50 border border-slate-100 rounded-xl outline-none" value={reportStartDate} onChange={e => setReportStartDate(e.target.value)} />
-                </div>
-                <div>
-                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Data de Fim</label>
-                  <input type="date" className="w-full p-3 bg-slate-50 border border-slate-100 rounded-xl outline-none" value={reportEndDate} onChange={e => setReportEndDate(e.target.value)} />
-                </div>
-                <div>
-                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Tipo de Transação</label>
-                  <select className="w-full p-3 bg-slate-50 border border-slate-100 rounded-xl outline-none" value={reportType} onChange={e => setReportType(e.target.value as 'ALL' | TransactionType)}>
-                    <option value="ALL">Todos</option>
-                    <option value="INCOME">Receitas</option>
-                    <option value="EXPENSE">Despesas</option>
-                    <option value="TRANSFER">Transferências</option>
+            <div className="bg-white p-6 rounded-2xl border border-slate-200/40 shadow-sm flex flex-wrap items-center justify-between gap-4">
+              <div className="flex items-center gap-4">
+                <div className="flex flex-col">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Ano de Exercício</label>
+                  <select
+                    value={dreYear}
+                    onChange={(e) => setDreYear(e.target.value)}
+                    className="p-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold outline-none"
+                  >
+                    {[2023, 2024, 2025, 2026, 2027].map(y => (
+                      <option key={y} value={y.toString()}>{y}</option>
+                    ))}
                   </select>
                 </div>
-                <div>
-                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Categoria</label>
-                  <input type="text" className="w-full p-3 bg-slate-50 border border-slate-100 rounded-xl outline-none" placeholder="Ex: Alimentação" value={reportCategory} onChange={e => setReportCategory(e.target.value)} />
+                <div className="flex flex-col">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Escopo</label>
+                  <div className="flex bg-slate-100 p-1 rounded-lg">
+                    {(['ALL', 'Empresa', 'Pessoal'] as const).map(s => (
+                      <button
+                        key={s}
+                        onClick={() => setDreScope(s)}
+                        className={`px-3 py-1 rounded-md text-[10px] font-bold transition-all ${dreScope === s ? 'bg-white text-primary shadow-sm' : 'text-slate-500'}`}
+                      >
+                        {s === 'ALL' ? 'Todos' : s}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
-              <button onClick={handleGenerateReport} className="mt-6 w-full py-3 bg-primary text-white rounded-2xl font-black uppercase tracking-widest shadow-lg shadow-primary/10 hover:bg-primary-dark">Gerar Relatório</button>
-              {reportData.length > 0 && (
+              <div className="flex items-center gap-6">
+                <div className="text-right">
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Resultado do Exercício</p>
+                  <p className={`text-xl font-black ${dreData.structure.revenueBruta.reduce((a, b) => a + b, 0) - dreData.structure.deductions.reduce((a, b) => a + b, 0) - dreData.structure.costs.reduce((a, b) => a + b, 0) - dreData.structure.operatingExpenses.reduce((a, b) => a + b, 0) - dreData.structure.personnel.reduce((a, b) => a + b, 0) >= 0 ? 'text-primary' : 'text-rose-600'}`}>
+                    {formatCurrency(
+                      dreData.structure.revenueBruta.reduce((a, b) => a + b, 0) -
+                      dreData.structure.deductions.reduce((a, b) => a + b, 0) -
+                      dreData.structure.costs.reduce((a, b) => a + b, 0) -
+                      dreData.structure.operatingExpenses.reduce((a, b) => a + b, 0) -
+                      dreData.structure.personnel.reduce((a, b) => a + b, 0) +
+                      dreData.structure.otherIncome.reduce((a, b) => a + b, 0) -
+                      dreData.structure.otherExpenses.reduce((a, b) => a + b, 0)
+                    )}
+                  </p>
+                </div>
                 <PDFDownloadLink
-                  document={<ReportPDF
-                    reportData={reportData}
-                    startDate={reportStartDate}
-                    endDate={reportEndDate}
-                    reportType={reportType}
-                    reportCategory={reportCategory}
+                  document={<DREPDF
+                    dreData={dreData}
+                    year={dreYear}
+                    scope={dreScope}
                   />}
-                  fileName={`relatorio_financeiro_${new Date().toISOString().split('T')[0]}.pdf`}
+                  fileName={`DRE_${dreYear}_${dreScope === 'ALL' ? 'Todos' : dreScope}_${new Date().toISOString().split('T')[0]}.pdf`}
                 >
                   {({ loading }) => (
                     <button
-                      className="mt-4 w-full py-3 bg-blue-600 text-white rounded-2xl font-bold"
+                      className="px-6 py-2 bg-primary text-white rounded-xl font-black uppercase tracking-widest shadow-lg shadow-primary/10 hover:bg-primary-dark transition-all flex items-center justify-center gap-2 text-[10px]"
                       disabled={loading}
                     >
-                      {loading ? 'Gerando PDF...' : 'Baixar PDF'}
+                      <FileText size={16} />
+                      {loading ? '...' : 'Exportar PDF'}
                     </button>
                   )}
                 </PDFDownloadLink>
-              )}
+              </div>
             </div>
 
-            {reportData.length > 0 && (
-              <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
-                <div className="p-6 border-b border-slate-50">
-                  <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest flex items-center gap-2">
-                    <FileText size={18} className="text-primary-light" /> Resultados do Relatório
-                  </h3>
-                </div>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left">
-                    <thead>
-                      <tr className="bg-slate-50/50 text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                        <th className="px-6 py-4">Data</th>
-                        <th className="px-6 py-4">Descrição</th>
-                        <th className="px-6 py-4">Tipo</th>
-                        <th className="px-6 py-4">Categoria</th>
-                        <th className="px-6 py-4 text-right">Valor</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {reportData.map(t => (
-                        <tr key={t.id} className="hover:bg-slate-50 transition-all">
-                          <td className="px-6 py-4 text-xs font-bold text-slate-600">{formatDate(t.due_date)}</td>
-                          <td className="px-6 py-4 text-xs font-bold text-slate-800">{t.description}</td>
-                          <td className="px-6 py-4 text-xs font-bold text-slate-600">{t.type}</td>
-                          <td className="px-6 py-4 text-xs font-bold text-slate-600">{t.category}</td>
-                          <td className="px-6 py-4 text-right font-black">
-                            {t.type === TransactionType.INCOME ? '+' : t.type === TransactionType.EXPENSE ? '-' : '±'} {formatCurrency(t.amount)}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
+            <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-slate-50 text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                    <th className="px-6 py-4 min-w-[200px] sticky left-0 bg-slate-50 z-10">Descrição</th>
+                    {['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'].map(m => (
+                      <th key={m} className="px-4 py-4 text-right">{m}</th>
+                    ))}
+                    <th className="px-6 py-4 text-right bg-slate-100/50">Total</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {/* RECEITA BRUTA */}
+                  <DRERow label="(+) RECEITA BRUTA" values={dreData.structure.revenueBruta} isHeader />
+                  {Object.entries(dreData.details.revenue).map(([cat, vals]) => (
+                    <DRERow key={cat} label={cat} values={vals} isSubItem />
+                  ))}
+
+                  <DRERow label="(-) DEDUÇÕES (Taxas/Impostos)" values={dreData.structure.deductions} isNegative />
+
+                  {/* RECEITA LÍQUIDA */}
+                  <DRERow
+                    label="(=) RECEITA LÍQUIDA"
+                    values={dreData.structure.revenueBruta.map((v, i) => v - dreData.structure.deductions[i])}
+                    isTotal
+                  />
+
+                  <DRERow label="(-) CUSTOS DOS SERVIÇOS (Insumos/Logística)" values={dreData.structure.costs} isNegative />
+
+                  {/* LUCRO BRUTO */}
+                  <DRERow
+                    label="(=) LUCRO BRUTO"
+                    values={dreData.structure.revenueBruta.map((v, i) => v - dreData.structure.deductions[i] - dreData.structure.costs[i])}
+                    isTotal
+                  />
+
+                  {/* DESPESAS OPERACIONAIS */}
+                  <DRERow label="(-) DESPESAS OPERACIONAIS" values={dreData.structure.operatingExpenses.map((v, i) => v + dreData.structure.personnel[i])} isHeader isNegative />
+                  {Object.entries(dreData.details.operating).map(([cat, vals]) => (
+                    <DRERow key={cat} label={cat} values={vals} isSubItem isNegative />
+                  ))}
+                  <DRERow label="Despesas com Pessoal" values={dreData.structure.personnel} isSubItem isNegative />
+
+                  {/* RESULTADO OPERACIONAL (EBITDA) */}
+                  <DRERow
+                    label="(=) RESULTADO OPERACIONAL"
+                    values={dreData.structure.revenueBruta.map((v, i) =>
+                      v - dreData.structure.deductions[i] - dreData.structure.costs[i] - dreData.structure.operatingExpenses[i] - dreData.structure.personnel[i]
+                    )}
+                    isTotal
+                  />
+
+                  <DRERow label="(+/-) RESULTADO FINANCEIRO / OUTROS" values={dreData.structure.otherIncome.map((v, i) => v - dreData.structure.otherExpenses[i] - dreData.structure.financial[i])} />
+
+                  {/* RESULTADO LÍQUIDO */}
+                  <DRERow
+                    label="(=) RESULTADO LÍQUIDO DO EXERCÍCIO"
+                    values={dreData.structure.revenueBruta.map((v, i) =>
+                      v - dreData.structure.deductions[i] - dreData.structure.costs[i] - dreData.structure.operatingExpenses[i] - dreData.structure.personnel[i] +
+                      dreData.structure.otherIncome[i] - dreData.structure.otherExpenses[i] - dreData.structure.financial[i]
+                    )}
+                    isFinal
+                  />
+                </tbody>
+              </table>
+            </div>
+            <div className="p-4 bg-blue-50 border border-blue-100 rounded-2xl flex items-start gap-3">
+              <AlertCircle size={18} className="text-blue-500 shrink-0 mt-0.5" />
+              <p className="text-[11px] text-blue-700 font-medium leading-relaxed">
+                Este DRE é gerado automaticamente com base nas categorias das suas transações efetivadas.
+                Para garantir a precisão, certifique-se de categorizar corretamente seus lançamentos como 'Serviços' para receitas,
+                'Impostos' para deduções e 'Escritório' ou 'Administrativo' para despesas operacionais.
+              </p>
+            </div>
           </div>
         )
       }
+
 
       {/* MODALS */}
       {
@@ -1339,5 +1473,40 @@ const StatCard: React.FC<StatCardProps> = ({ label, value, icon, sub }) => (
     </div>
   </div>
 );
+
+interface DRERowProps {
+  label: string;
+  values: number[];
+  isHeader?: boolean;
+  isSubItem?: boolean;
+  isTotal?: boolean;
+  isFinal?: boolean;
+  isNegative?: boolean;
+}
+
+const DRERow: React.FC<DRERowProps> = ({ label, values, isHeader, isSubItem, isTotal, isFinal, isNegative }) => {
+  const total = values.reduce((a, b) => a + b, 0);
+
+  return (
+    <tr className={`
+      ${isHeader ? 'bg-slate-50/50 font-black text-slate-800' : ''}
+      ${isTotal ? 'bg-slate-100/30 font-bold border-t border-slate-200' : ''}
+      ${isFinal ? 'bg-primary/5 font-black text-primary border-t-2 border-primary/20' : ''}
+      hover:bg-slate-50 transition-colors
+    `}>
+      <td className={`px-6 py-3 text-xs truncate max-w-[250px] sticky left-0 bg-white z-10 ${isSubItem ? 'pl-10 text-slate-500 font-medium italic' : ''}`}>
+        {label}
+      </td>
+      {values.map((v, i) => (
+        <td key={i} className={`px-4 py-3 text-right text-[11px] font-medium ${isNegative && v !== 0 ? 'text-rose-600' : ''} ${isFinal || isTotal ? 'font-bold' : ''}`}>
+          {Math.abs(v) < 0.01 ? '-' : formatCurrency(v)}
+        </td>
+      ))}
+      <td className={`px-6 py-3 text-right text-xs font-black ${isFinal ? 'text-primary' : isNegative && total !== 0 ? 'text-rose-700' : 'text-slate-800'} bg-slate-50/50`}>
+        {Math.abs(total) < 0.01 ? '-' : formatCurrency(total)}
+      </td>
+    </tr>
+  );
+};
 
 export default FinancialModule;

@@ -279,6 +279,7 @@ export interface ProjectExpense {
   date: string;
   item: string;
   amount: number;
+  type?: TransactionType;
   created_at: string;
 }
 

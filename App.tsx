@@ -272,7 +272,7 @@ const App: React.FC = () => {
         }
       };
 
-      fetchSecondaryData();
+      await fetchSecondaryData();
 
     } catch (err: any) {
       console.error("App: fetchInitialData error:", err);
@@ -443,7 +443,7 @@ const App: React.FC = () => {
         if (incomeError) throw incomeError;
 
         showNotification("Transferência realizada com sucesso!", "success");
-        fetchInitialData(uid);
+        await fetchInitialData(uid);
         endProgress();
         return;
       }
@@ -636,10 +636,10 @@ const App: React.FC = () => {
     try {
       const { error } = await supabase.from('project_expenses').insert({ ...expense, user_id: uid });
       if (error) throw error;
-      showNotification('Despesa adicionada com sucesso!');
-      fetchInitialData(uid);
+      showNotification(expense.type === TransactionType.INCOME ? 'Receita adicionada!' : 'Despesa adicionada com sucesso!');
+      await fetchInitialData(uid);
     } catch (err: any) {
-      showNotification(`Falha ao adicionar despesa: ${extractErrorMessage(err)}`, 'error');
+      showNotification(`Falha ao adicionar: ${extractErrorMessage(err)}`, 'error');
     } finally {
       endProgress();
     }
@@ -653,7 +653,7 @@ const App: React.FC = () => {
       const { error } = await supabase.from('project_expenses').delete().eq('id', id).eq('user_id', uid);
       if (error) throw error;
       showNotification('Despesa removida.');
-      fetchInitialData(uid);
+      await fetchInitialData(uid);
     } catch (err: any) {
       showNotification(`Falha ao remover despesa: ${extractErrorMessage(err)}`, 'error');
     } finally {

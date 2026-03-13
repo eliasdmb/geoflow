@@ -31,9 +31,12 @@ import {
   CloudCheck,
   Receipt,
   Trash2,
-  Plus
+  Plus,
+  TrendingUp,
+  TrendingDown,
+  Wallet
 } from 'lucide-react';
-import { Project, Client, RuralProperty, Professional, WorkflowStepId, ProjectStatus, SigefCertification, Service, BudgetItemTemplate, Registry, FinancialTransaction, ProjectExpense } from '../types';
+import { Project, Client, RuralProperty, Professional, WorkflowStepId, ProjectStatus, SigefCertification, Service, BudgetItemTemplate, Registry, FinancialTransaction, ProjectExpense, TransactionType } from '../types';
 import { WORKFLOW_STEPS_DEFINITION, CAR_WORKFLOW_STEPS_DEFINITION } from '../constants';
 import DocumentPreview from './DocumentPreview';
 
@@ -155,7 +158,12 @@ const ProjectWorkflow: React.FC<ProjectWorkflowProps> = ({
   const [hasTriedInit, setHasTriedInit] = useState(false);
   const [checklistState, setChecklistState] = useState<Record<string, boolean>>({});
   const [pointsState, setPointsState] = useState({ m: '', p: '', v: '' });
-  const [newExpense, setNewExpense] = useState({ date: '', item: '', amount: '' });
+  const [newExpense, setNewExpense] = useState({ 
+    date: new Date().toISOString().split('T')[0], 
+    item: '', 
+    amount: '', 
+    type: TransactionType.EXPENSE 
+  });
   const [isAddingExpense, setIsAddingExpense] = useState(false);
 
   const autoSaveTimeoutRef = useRef<number | null>(null);
@@ -722,38 +730,66 @@ const ProjectWorkflow: React.FC<ProjectWorkflowProps> = ({
         </div>
       </div>
 
-      {/* ===================== SEÇÃO DE DESPESAS ===================== */}
+      {/* ===================== SEÇÃO DE MOVIMENTAÇÕES FINANCEIRAS ===================== */}
       <div className="mt-2 animate-in fade-in slide-in-from-bottom-4 duration-700">
         <div className="bg-white rounded-3xl border border-slate-200 overflow-hidden shadow-sm">
           <div className="p-5 border-b border-slate-100 flex items-center justify-between gap-4">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-rose-50 text-rose-500 rounded-2xl flex items-center justify-center shadow-inner shrink-0">
-                <Receipt size={20} />
+              <div className="w-10 h-10 bg-primary/5 text-primary rounded-2xl flex items-center justify-center shadow-inner shrink-0">
+                <Wallet size={20} />
               </div>
               <div>
-                <h3 className="text-sm font-semibold text-slate-800 tracking-tight">Despesas do Projeto</h3>
+                <h3 className="text-sm font-semibold text-slate-800 tracking-tight">Movimentações Financeiras</h3>
                 <p className="text-[10px] text-slate-400 font-medium uppercase tracking-widest">
                   {projectExpenses.length} {projectExpenses.length === 1 ? 'registro' : 'registros'}
                 </p>
               </div>
             </div>
-            <div className="flex items-center gap-2 px-4 py-2 bg-rose-50 border border-rose-100 rounded-2xl">
-              <span className="text-[10px] font-semibold text-rose-400 uppercase tracking-widest hidden sm:block">Total</span>
-              <span className="text-sm font-bold text-rose-600 tracking-tight">
-                R$ {projectExpenses.reduce((acc, e) => acc + (e.amount || 0), 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-              </span>
-            </div>
+            {(() => {
+                const totalIncome = projectExpenses
+                  .filter(e => e.type === TransactionType.INCOME)
+                  .reduce((acc, e) => acc + Number(e.amount || 0), 0);
+                const totalExpense = projectExpenses
+                  .filter(e => e.type !== TransactionType.INCOME)
+                  .reduce((acc, e) => acc + Number(e.amount || 0), 0);
+              const balance = totalIncome - totalExpense;
+              return (
+                <div className={`flex items-center gap-2 px-4 py-2 ${balance >= 0 ? 'bg-emerald-50 border-emerald-100' : 'bg-rose-50 border-rose-100'} border rounded-2xl`}>
+                  <span className={`text-[10px] font-semibold ${balance >= 0 ? 'text-emerald-400' : 'text-rose-400'} uppercase tracking-widest hidden sm:block`}>Saldo do Projeto</span>
+                  <span className={`text-sm font-bold ${balance >= 0 ? 'text-emerald-600' : 'text-rose-600'} tracking-tight`}>
+                    R$ {balance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                  </span>
+                </div>
+              );
+            })()}
           </div>
 
           <div className="p-5 bg-slate-50/50 border-b border-slate-100">
             <div className="flex flex-col sm:flex-row gap-3 items-end">
+              <div className="flex flex-col gap-1 flex-shrink-0">
+                <label className="text-[9px] font-semibold text-slate-400 uppercase tracking-widest px-1">Tipo</label>
+                <div className="flex bg-white border border-slate-200 rounded-xl p-1 h-10 w-full sm:w-40">
+                  <button
+                    onClick={() => setNewExpense(prev => ({ ...prev, type: TransactionType.EXPENSE }))}
+                    className={`flex-1 flex items-center justify-center gap-1.5 rounded-lg text-[9px] font-bold uppercase transition-all ${newExpense.type === TransactionType.EXPENSE ? 'bg-rose-500 text-white shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+                  >
+                    <TrendingDown size={12} /> Despesa
+                  </button>
+                  <button
+                    onClick={() => setNewExpense(prev => ({ ...prev, type: TransactionType.INCOME }))}
+                    className={`flex-1 flex items-center justify-center gap-1.5 rounded-lg text-[9px] font-bold uppercase transition-all ${newExpense.type === TransactionType.INCOME ? 'bg-emerald-500 text-white shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+                  >
+                    <TrendingUp size={12} /> Receita
+                  </button>
+                </div>
+              </div>
               <div className="flex flex-col gap-1 flex-shrink-0">
                 <label className="text-[9px] font-semibold text-slate-400 uppercase tracking-widest px-1">Data</label>
                 <input
                   type="date"
                   value={newExpense.date}
                   onChange={e => setNewExpense(prev => ({ ...prev, date: e.target.value }))}
-                  className="h-10 px-3 bg-white border border-slate-200 rounded-xl text-xs font-medium text-slate-700 outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40 transition-all w-full sm:w-40"
+                  className="h-10 px-3 bg-white border border-slate-200 rounded-xl text-xs font-medium text-slate-700 outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40 transition-all w-full sm:w-36"
                 />
               </div>
               <div className="flex flex-col gap-1 flex-1 min-w-0">
@@ -769,19 +805,36 @@ const ProjectWorkflow: React.FC<ProjectWorkflowProps> = ({
               <div className="flex flex-col gap-1 flex-shrink-0">
                 <label className="text-[9px] font-semibold text-slate-400 uppercase tracking-widest px-1">Valor (R$)</label>
                 <input
-                  type="number"
+                  type="text"
+                  inputMode="decimal"
                   placeholder="0,00"
-                  min="0"
-                  step="0.01"
                   value={newExpense.amount}
-                  onChange={e => setNewExpense(prev => ({ ...prev, amount: e.target.value }))}
-                  className="h-10 px-3 bg-white border border-slate-200 rounded-xl text-xs font-medium text-slate-700 outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40 transition-all w-full sm:w-36"
+                  onChange={e => {
+                    const val = e.target.value.replace(',', '.');
+                    if (val === '' || /^\d*\.?\d*$/.test(val)) {
+                      setNewExpense(prev => ({ ...prev, amount: e.target.value }));
+                    }
+                  }}
+                  className="h-10 px-3 bg-white border border-slate-200 rounded-xl text-xs font-medium text-slate-700 outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40 transition-all w-full sm:w-32"
                 />
               </div>
               <button
-                disabled={isAddingExpense || !newExpense.date || !newExpense.item || !newExpense.amount}
                 onClick={async () => {
-                  if (!newExpense.date || !newExpense.item || !newExpense.amount) return;
+                  const cleanAmount = newExpense.amount.replace(',', '.');
+                  if (!newExpense.date) {
+                    onUpdateStep?.('', project.id, project.status as any, undefined); // Dummy call to trigger refresh if needed, but let's use notification
+                    alert("Por favor, selecione uma data.");
+                    return;
+                  }
+                  if (!newExpense.item.trim()) {
+                    alert("Por favor, descreva o item.");
+                    return;
+                  }
+                  if (!cleanAmount || isNaN(parseFloat(cleanAmount)) || parseFloat(cleanAmount) <= 0) {
+                    alert("Por favor, insira um valor válido maior que zero.");
+                    return;
+                  }
+
                   setIsAddingExpense(true);
                   try {
                     await onAddExpense({
@@ -789,14 +842,17 @@ const ProjectWorkflow: React.FC<ProjectWorkflowProps> = ({
                       project_id: project.id,
                       date: newExpense.date,
                       item: newExpense.item.trim(),
-                      amount: parseFloat(newExpense.amount)
+                      amount: parseFloat(cleanAmount),
+                      type: newExpense.type
                     });
-                    setNewExpense({ date: '', item: '', amount: '' });
+                    setNewExpense(prev => ({ ...prev, item: '', amount: '' }));
+                  } catch (err) {
+                    console.error(err);
                   } finally {
                     setIsAddingExpense(false);
                   }
                 }}
-                className="h-10 px-5 bg-primary text-white rounded-xl text-[10px] font-bold uppercase tracking-widest shadow-md shadow-primary/20 hover:bg-primary-dark transition-all active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2 shrink-0 whitespace-nowrap"
+                className={`h-10 px-5 ${newExpense.type === TransactionType.INCOME ? 'bg-emerald-500 hover:bg-emerald-600 shadow-emerald-200' : 'bg-primary hover:bg-primary-dark shadow-primary/20'} text-white rounded-xl text-[10px] font-bold uppercase tracking-widest shadow-md transition-all active:scale-95 disabled:opacity-40 flex items-center gap-2 shrink-0 whitespace-nowrap`}
               >
                 {isAddingExpense ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
                 Adicionar
@@ -809,8 +865,8 @@ const ProjectWorkflow: React.FC<ProjectWorkflowProps> = ({
               <div className="w-12 h-12 bg-slate-50 text-slate-300 rounded-2xl flex items-center justify-center mb-3 shadow-inner">
                 <Receipt size={22} />
               </div>
-              <p className="text-xs text-slate-400 font-medium">Nenhuma despesa registrada para este projeto.</p>
-              <p className="text-[10px] text-slate-300 mt-1">Preencha o formulário acima e clique em Adicionar.</p>
+              <p className="text-xs text-slate-400 font-medium">Nenhuma movimentação registrada para este projeto.</p>
+              <p className="text-[10px] text-slate-300 mt-1">Preencha o formulário acima e escolha Receita ou Despesa.</p>
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -819,6 +875,7 @@ const ProjectWorkflow: React.FC<ProjectWorkflowProps> = ({
                   <tr className="border-b border-slate-100">
                     <th className="text-left px-5 py-3 text-[9px] font-semibold text-slate-400 uppercase tracking-widest w-36">Data</th>
                     <th className="text-left px-5 py-3 text-[9px] font-semibold text-slate-400 uppercase tracking-widest">Item</th>
+                    <th className="text-center px-5 py-3 text-[9px] font-semibold text-slate-400 uppercase tracking-widest w-24">Tipo</th>
                     <th className="text-right px-5 py-3 text-[9px] font-semibold text-slate-400 uppercase tracking-widest w-36">Valor</th>
                     <th className="px-5 py-3 w-12"></th>
                   </tr>
@@ -830,14 +887,19 @@ const ProjectWorkflow: React.FC<ProjectWorkflowProps> = ({
                         {new Date(expense.date + 'T00:00:00').toLocaleDateString('pt-BR')}
                       </td>
                       <td className="px-5 py-3.5 text-slate-700 font-medium">{expense.item}</td>
-                      <td className="px-5 py-3.5 text-right font-semibold text-slate-800 whitespace-nowrap">
-                        R$ {expense.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                      <td className="px-5 py-3.5 text-center">
+                        <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-tighter ${expense.type === TransactionType.INCOME ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'}`}>
+                          {expense.type === TransactionType.INCOME ? 'Receita' : 'Despesa'}
+                        </span>
+                      </td>
+                      <td className={`px-5 py-3.5 text-right font-semibold whitespace-nowrap ${expense.type === TransactionType.INCOME ? 'text-emerald-600' : 'text-rose-600'}`}>
+                        {expense.type === TransactionType.INCOME ? '+' : '-'} R$ {Number(expense.amount).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                       </td>
                       <td className="px-5 py-3.5 text-right">
                         <button
                           onClick={() => onDeleteExpense(expense.id)}
                           className="w-7 h-7 flex items-center justify-center text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-all opacity-0 group-hover:opacity-100"
-                          title="Excluir despesa"
+                          title="Excluir movimentação"
                         >
                           <Trash2 size={13} />
                         </button>
@@ -846,13 +908,24 @@ const ProjectWorkflow: React.FC<ProjectWorkflowProps> = ({
                   ))}
                 </tbody>
                 <tfoot>
-                  <tr className="border-t-2 border-slate-100 bg-slate-50/80">
-                    <td colSpan={2} className="px-5 py-3.5 text-[10px] font-semibold text-slate-500 uppercase tracking-widest">Total Geral</td>
-                    <td className="px-5 py-3.5 text-right font-bold text-rose-600 text-sm tracking-tight whitespace-nowrap">
-                      R$ {projectExpenses.reduce((acc, e) => acc + (e.amount || 0), 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                    </td>
-                    <td></td>
-                  </tr>
+                  {(() => {
+                    const totalIncome = projectExpenses
+                      .filter(e => e.type === TransactionType.INCOME)
+                      .reduce((acc, e) => acc + Number(e.amount || 0), 0);
+                    const totalExpense = projectExpenses
+                      .filter(e => e.type !== TransactionType.INCOME)
+                      .reduce((acc, e) => acc + Number(e.amount || 0), 0);
+                    const balance = totalIncome - totalExpense;
+                    return (
+                      <tr className="border-t-2 border-slate-100 bg-slate-50/80">
+                        <td colSpan={3} className="px-5 py-4 text-[10px] font-semibold text-slate-500 uppercase tracking-widest text-right">Saldo Final do Projeto</td>
+                        <td className={`px-5 py-4 text-right font-bold text-sm tracking-tight whitespace-nowrap ${balance >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                          R$ {balance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                        </td>
+                        <td></td>
+                      </tr>
+                    );
+                  })()}
                 </tfoot>
               </table>
             </div>
