@@ -397,55 +397,162 @@ const ProjectWorkflow: React.FC<ProjectWorkflowProps> = ({
         </div>
       </div>
 
+      {/* ── Stepper horizontal ── */}
+      <div className="bg-white rounded-2xl border border-slate-100 px-5 py-4 shadow-sm overflow-x-auto">
+        <div className="flex items-start min-w-max">
+          {steps.map((step, index) => {
+            const isActive = selectedStepIndex === index;
+            const isCompleted = step.status === ProjectStatus.COMPLETED;
+            const isWaiting = step.status === ProjectStatus.WAITING_APPROVAL;
+            const isRejected = step.status === ProjectStatus.REJECTED;
+            const isCurrent = project.current_step_index === index;
+            const isLocked = index > project.current_step_index;
+            const isLast = index === steps.length - 1;
+            return (
+              <React.Fragment key={step.id || index}>
+                <button
+                  disabled={isLocked}
+                  onClick={() => setSelectedStepIndex(index)}
+                  title={step.label}
+                  className={`flex flex-col items-center gap-1.5 group transition-all ${isLocked ? 'opacity-35 cursor-not-allowed' : 'cursor-pointer'}`}
+                >
+                  <div className={`w-9 h-9 rounded-full flex items-center justify-center border-2 text-[10px] font-black transition-all duration-300 ${
+                    isActive ? 'bg-primary border-primary text-white scale-110 shadow-lg shadow-primary/30' :
+                    isCompleted ? 'bg-primary/10 border-primary/50 text-primary' :
+                    isWaiting ? 'bg-amber-50 border-amber-400 text-amber-600' :
+                    isRejected ? 'bg-rose-50 border-rose-400 text-rose-500' :
+                    isCurrent ? 'bg-amber-50 border-amber-300 text-amber-600 animate-pulse' :
+                    'bg-slate-50 border-slate-200 text-slate-300'
+                  }`}>
+                    {isCompleted ? <CheckCircle2 size={14} /> :
+                     isRejected ? <XCircle size={14} /> :
+                     isWaiting ? <Clock size={13} /> :
+                     <span>{index + 1}</span>}
+                  </div>
+                  <span className={`text-[8px] font-semibold uppercase tracking-tight w-14 text-center leading-tight transition-colors ${
+                    isActive ? 'text-primary' :
+                    isCompleted ? 'text-slate-400' :
+                    isCurrent ? 'text-amber-500' :
+                    'text-slate-300'
+                  }`}>
+                    {step.label}
+                  </span>
+                </button>
+                {!isLast && (
+                  <div className={`w-8 h-0.5 mx-0.5 mt-[18px] shrink-0 rounded-full transition-all duration-500 ${
+                    isCompleted ? 'bg-primary/40' : 'bg-slate-100'
+                  }`} />
+                )}
+              </React.Fragment>
+            );
+          })}
+        </div>
+      </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-        <div className="lg:col-span-4 space-y-2">
-          {/* (Keep sidebar code same as before) */}
-          <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
-            <div className="p-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
-              <span className="font-black text-[10px] uppercase text-slate-400 tracking-widest">Workflow Progress</span>
-              <span className="text-[10px] font-black text-primary bg-primary/5 px-2 py-0.5 rounded-full uppercase tracking-tighter">
-                {Math.round(((project.current_step_index) / (steps.length - 1 || 1)) * 100)}%
-              </span>
+        {/* ── Timeline vertical sidebar ── */}
+        <div className="lg:col-span-4">
+          <div className="sticky top-4 bg-white rounded-2xl border border-slate-100 overflow-hidden shadow-sm">
+            {/* Cabeçalho com barra de progresso */}
+            <div className="px-5 py-4 border-b border-slate-100">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">Etapas do Projeto</span>
+                <span className="text-xs font-bold text-primary">
+                  {Math.round((project.current_step_index / (steps.length - 1 || 1)) * 100)}%
+                </span>
+              </div>
+              <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-gradient-to-r from-primary to-primary-dark rounded-full transition-all duration-700"
+                  style={{ width: `${Math.round((project.current_step_index / (steps.length - 1 || 1)) * 100)}%` }}
+                />
+              </div>
+              <p className="text-[9px] text-slate-400 mt-1.5 font-medium">
+                {steps.filter(s => s.status === ProjectStatus.COMPLETED).length} de {steps.length} etapas concluídas
+              </p>
             </div>
-            <div className="p-2 space-y-1">
+
+            {/* Timeline */}
+            <div className="p-3 max-h-[60vh] overflow-y-auto custom-scrollbar">
               {steps.map((step, index) => {
                 const isActive = selectedStepIndex === index;
                 const isCompleted = step.status === ProjectStatus.COMPLETED;
+                const isWaiting = step.status === ProjectStatus.WAITING_APPROVAL;
+                const isRejected = step.status === ProjectStatus.REJECTED;
                 const isCurrent = project.current_step_index === index;
                 const isLocked = index > project.current_step_index;
+                const isLast = index === steps.length - 1;
 
                 return (
-                  <button
-                    key={step.id || index}
-                    disabled={isLocked}
-                    onClick={() => setSelectedStepIndex(index)}
-                    className={`w-full flex items-center gap-4 p-3.5 rounded-2xl text-left transition-all relative group ${isActive
-                      ? 'bg-primary text-white shadow-premium ring-1 ring-primary/20 translate-x-1'
-                      : isLocked ? 'opacity-30 cursor-not-allowed grayscale' : 'hover:bg-slate-50 text-slate-muted hover:text-slate-main translate-x-0'
-                      }`}
-                  >
-                    <div className={`shrink-0 w-10 h-10 rounded-xl flex items-center justify-center border-2 transition-all duration-300 ${isActive ? 'bg-white text-primary border-white scale-110 shadow-soft' :
-                      isCompleted ? 'bg-primary/5 text-primary border-primary/20' :
-                        step.status === ProjectStatus.WAITING_APPROVAL ? 'bg-amber-50 text-amber-600 border-amber-200/50' :
-                          step.status === ProjectStatus.REJECTED ? 'bg-rose-50 text-rose-600 border-rose-100' :
-                            isCurrent ? 'bg-amber-50 text-amber-600 border-amber-200/50 animate-pulse' : 'bg-slate-50 border-slate-100 text-slate-300'
+                  <div key={step.id || index} className="relative flex gap-3">
+                    {/* Linha vertical conectora */}
+                    {!isLast && (
+                      <div className="absolute left-[19px] top-9 bottom-0 w-0.5 z-0">
+                        <div className={`w-full h-full rounded-full ${isCompleted ? 'bg-primary/30' : 'bg-slate-100'} transition-all duration-500`} />
+                      </div>
+                    )}
+
+                    <button
+                      disabled={isLocked}
+                      onClick={() => setSelectedStepIndex(index)}
+                      className="w-full flex items-start gap-3 py-1 text-left disabled:cursor-not-allowed group"
+                    >
+                      {/* Círculo de status */}
+                      <div className={`shrink-0 w-9 h-9 rounded-full border-2 flex items-center justify-center z-10 transition-all duration-300 ${
+                        isActive
+                          ? 'bg-primary border-primary text-white shadow-md shadow-primary/30 scale-110'
+                          : isCompleted
+                          ? 'bg-primary/10 border-primary/60 text-primary'
+                          : isWaiting
+                          ? 'bg-amber-50 border-amber-300 text-amber-600'
+                          : isRejected
+                          ? 'bg-rose-50 border-rose-300 text-rose-500'
+                          : isCurrent
+                          ? 'bg-amber-50 border-amber-300 text-amber-600 animate-pulse'
+                          : isLocked
+                          ? 'bg-slate-50 border-slate-100 text-slate-200'
+                          : 'bg-slate-50 border-slate-200 text-slate-400'
                       }`}>
-                      {isCompleted ? <CheckCircle2 size={18} /> :
-                        step.status === ProjectStatus.REJECTED ? <XCircle size={18} /> :
-                          step.status === ProjectStatus.WAITING_APPROVAL ? <Clock size={18} /> :
-                            WORKFLOW_STEPS_DEFINITION[index]?.icon || <ClipboardCheck size={18} />}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className={`text-[10px] font-semibold uppercase tracking-widest truncate ${isActive ? 'text-white/70' : 'text-slate-muted'}`}>Etapa {index + 1}</p>
-                      <h4 className={`text-xs font-semibold truncate ${isActive ? 'text-white' : 'text-slate-main group-hover:text-primary transition-colors'}`}>{step.label}</h4>
-                    </div>
-                    {isCurrent && !isActive && (
-                      <div className="shrink-0 w-1.5 h-1.5 bg-primary rounded-full animate-ping"></div>
-                    )}
-                    {isActive && (
-                      <div className="absolute left-0 w-1 h-6 bg-white rounded-r-full"></div>
-                    )}
-                  </button>
+                        {isCompleted ? <CheckCircle2 size={14} /> :
+                         isRejected ? <XCircle size={14} /> :
+                         isWaiting ? <Clock size={13} /> :
+                         <span className="text-[10px] font-black">{index + 1}</span>}
+                      </div>
+
+                      {/* Texto da etapa */}
+                      <div className={`flex-1 min-w-0 pb-4 ${isLocked ? 'opacity-40' : ''}`}>
+                        <p className={`text-[9px] font-bold uppercase tracking-widest leading-none ${
+                          isActive ? 'text-primary' :
+                          isCompleted ? 'text-primary/50' :
+                          isWaiting ? 'text-amber-500' :
+                          isRejected ? 'text-rose-400' :
+                          isCurrent ? 'text-amber-500' :
+                          'text-slate-300'
+                        }`}>
+                          {isCompleted ? 'Concluída' :
+                           isWaiting ? 'Aguardando' :
+                           isRejected ? 'Rejeitada' :
+                           isCurrent ? 'Em Andamento' :
+                           isLocked ? 'Bloqueada' :
+                           `Etapa ${index + 1}`}
+                        </p>
+                        <p className={`text-xs font-semibold truncate mt-0.5 transition-colors ${
+                          isActive ? 'text-slate-800' :
+                          isCompleted ? 'text-slate-500' :
+                          isLocked ? 'text-slate-300' :
+                          'text-slate-600 group-hover:text-slate-800'
+                        }`}>
+                          {step.label}
+                        </p>
+                        {isCurrent && !isActive && (
+                          <span className="inline-flex items-center gap-1 mt-1">
+                            <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-ping" />
+                            <span className="text-[9px] font-semibold text-amber-500 uppercase tracking-wider">Atual</span>
+                          </span>
+                        )}
+                      </div>
+                    </button>
+                  </div>
                 );
               })}
             </div>

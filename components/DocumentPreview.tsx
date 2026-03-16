@@ -171,8 +171,30 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({
   const [generationProgress, setGenerationProgress] = useState(0);
   const [generationMessage, setGenerationMessage] = useState('');
   const [showHeader, setShowHeader] = useState(true); // Controla a visibilidade do cabeçalho na visualização
+  const [logoBase64, setLogoBase64] = useState<string>('');
 
   const LOGO_URL = 'https://lh3.googleusercontent.com/d/1xQfCG7HAQ6_LcrMn_1cINu5KSumlHdxT=s2000';
+
+  // Pré-carrega a logo como base64 para evitar problemas de CORS no html2canvas
+  useEffect(() => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      try {
+        const canvas = document.createElement('canvas');
+        canvas.width = img.naturalWidth;
+        canvas.height = img.naturalHeight;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(img, 0, 0);
+          setLogoBase64(canvas.toDataURL('image/png'));
+        }
+      } catch {
+        // CORS bloqueou o canvas; fallback para URL original
+      }
+    };
+    img.src = LOGO_URL + '&t=' + Date.now(); // cache-bust leve
+  }, []);
 
   const todayDate = new Date();
   const [customDate, setCustomDate] = useState(todayDate.toISOString().split('T')[0]);
@@ -622,7 +644,7 @@ Requerente`;
       setGenerationProgress(5);
 
       // Capturar o cabeçalho sempre para obter a altura e manter o espaço
-      const headerCanvas = await html2canvasLib(headerElement, { scale: 2 });
+      const headerCanvas = await html2canvasLib(headerElement, { scale: 2, useCORS: true, allowTaint: false });
       const headerImgData = headerCanvas.toDataURL('image/png');
       const headerHeightMm = headerCanvas.height * 210 / headerCanvas.width;
 
@@ -788,7 +810,7 @@ Requerente`;
         <div ref={headerRef} className="absolute -left-[9999px] -top-[9999px] w-[210mm] h-[45mm] p-[20mm] pb-0" style={{ boxSizing: 'border-box' }}>
           <div className="flex justify-between items-center border-b border-slate-100 pb-6">
             <div className="flex gap-5 items-center">
-              <img src={LOGO_URL} alt="Logo" className="h-20 w-auto object-contain" crossOrigin="anonymous" />
+              <img src={logoBase64 || LOGO_URL} alt="Logo" className="h-20 w-auto object-contain" crossOrigin="anonymous" />
               <div className="flex flex-col">
                 <h1 className="text-xl font-black uppercase tracking-tighter text-slate-900 leading-none mb-1">Metrica Agro</h1>
                 <p className="text-[8pt] font-black uppercase tracking-widest text-primary mb-1">Serviços Agronomicos e Geomensura</p>
@@ -957,7 +979,7 @@ Requerente`;
                 >
                   <div className="flex justify-between items-center w-full border-b border-slate-100 pb-6">
                     <div className="flex gap-5 items-center">
-                      <img src={LOGO_URL} alt="Logo" className="h-20 w-auto object-contain" crossOrigin="anonymous" />
+                      <img src={logoBase64 || LOGO_URL} alt="Logo" className="h-20 w-auto object-contain" crossOrigin="anonymous" />
                       <div className="flex flex-col">
                         <h1 className="text-xl font-black uppercase tracking-tighter text-slate-900 leading-none mb-1">Metrica Agro</h1>
                         <p className="text-[8pt] font-black uppercase tracking-widest text-primary mb-1">Serviços Agronomicos e Geomensura</p>
