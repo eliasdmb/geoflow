@@ -30,7 +30,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onEnterApp }) => {
                                 <Map size={22} />
                             </div>
                             <span className="font-heading font-bold text-xl text-slate-main tracking-tighter">
-                                Metrica<span className="text-primary italic">Agro</span>
+                                Geo<span className="text-primary italic">Flow</span>
                             </span>
                         </div>
 
@@ -96,13 +96,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onEnterApp }) => {
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative">
                     <div className="grid lg:grid-cols-2 gap-12 items-center">
                         <div className="space-y-8 animate-in fade-in slide-in-from-left-8 duration-1000">
-                            <div className="inline-flex items-center gap-2 px-3 py-1 bg-primary/10 border border-primary/20 rounded-full">
-                                <span className="relative flex h-2 w-2">
-                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
-                                    <span className="relative inline-flex rounded-full h-2 w-2 bg-primary"></span>
-                                </span>
-                                <span className="text-[10px] font-black uppercase tracking-widest text-primary-dark">Inovação no Campo</span>
-                            </div>
+
 
                             <h1 className="text-4xl sm:text-5xl font-heading font-black text-slate-main leading-[1.1] tracking-tighter">
                                 Gestão Inteligente de Projetos de <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-primary-light">Georreferenciamento de Imóveis Rurais.</span>
@@ -201,7 +195,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onEnterApp }) => {
                         />
                         <FeatureCard
                             icon={<Navigation size={32} />}
-                            title="CAD Ambiental Rural"
+                            title="CAR Ambiental Rural"
                             description="Elaboração e retificação de CAR com análise técnica criteriosa para segurança jurídica completa."
                             color="blue"
                         />
@@ -237,12 +231,12 @@ const LandingPage: React.FC<LandingPageProps> = ({ onEnterApp }) => {
                                 <Map size={18} />
                             </div>
                             <span className="font-heading font-bold text-lg text-slate-main tracking-tighter">
-                                Metrica<span className="text-primary italic">Agro</span>
+                                Geo<span className="text-primary italic">Flow</span>
                             </span>
                         </div>
 
                         <p className="text-xs font-semibold text-slate-muted uppercase tracking-widest">
-                            © 2026 MetricaAgro. Todos os direitos reservados.
+                            © 2026 GeoFlow. Todos os direitos reservados.
                         </p>
 
                         <div className="flex gap-6">

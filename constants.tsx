@@ -37,7 +37,6 @@ export const WORKFLOW_STEPS_DEFINITION: { id: WorkflowStepId; label: string; has
   { id: WorkflowStepId.GEO_REPORT, label: 'Laudo de Georreferenciamento', hasDocument: true, icon: <Map size={18} /> },
   { id: WorkflowStepId.CARTORY_REQ, label: 'Requerimento para o Cartório', hasDocument: true, icon: <Landmark size={18} /> },
   { id: WorkflowStepId.CRI_REGISTRATION, label: 'Registro no CRI', hasDocument: false, icon: <Stamp size={18} /> },
-  { id: WorkflowStepId.POINT_CONTROL, label: 'Controle de Pontos', hasDocument: false, icon: <MapPin size={18} /> },
   { id: WorkflowStepId.RECEIPT, label: 'RECIBO', hasDocument: true, icon: <Receipt size={18} /> },
 ];
 

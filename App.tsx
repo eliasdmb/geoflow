@@ -549,7 +549,7 @@ const App: React.FC = () => {
             <Loader2 className="animate-spin text-primary" size={40} />
           </div>
         </div>
-        <h3 className="text-[10px] text-slate-muted font-semibold uppercase tracking-[0.4em] animate-pulse">Sincronizando MetricaAgro</h3>
+        <h3 className="text-[10px] text-slate-muted font-semibold uppercase tracking-[0.4em] animate-pulse">Sincronizando GeoFlow</h3>
         <p className="mt-2 text-[9px] text-primary font-medium uppercase tracking-widest opacity-60">Preparando Workspace</p>
       </div>
     </div>

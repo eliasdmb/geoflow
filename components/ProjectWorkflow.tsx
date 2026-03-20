@@ -34,7 +34,8 @@ import {
   Plus,
   TrendingUp,
   TrendingDown,
-  Wallet
+  Wallet,
+  MapPin
 } from 'lucide-react';
 import { Project, Client, RuralProperty, Professional, WorkflowStepId, ProjectStatus, SigefCertification, Service, BudgetItemTemplate, Registry, FinancialTransaction, ProjectExpense, TransactionType } from '../types';
 import { WORKFLOW_STEPS_DEFINITION, CAR_WORKFLOW_STEPS_DEFINITION } from '../constants';
@@ -837,8 +838,64 @@ const ProjectWorkflow: React.FC<ProjectWorkflowProps> = ({
         </div>
       </div>
 
-      {/* ===================== SEÇÃO DE MOVIMENTAÇÕES FINANCEIRAS ===================== */}
-      <div className="mt-2 animate-in fade-in slide-in-from-bottom-4 duration-700">
+      {/* ===================== SEÇÃO INFERIOR: PONTOS + MOVIMENTAÇÕES ===================== */}
+      <div className="mt-2 animate-in fade-in slide-in-from-bottom-4 duration-700 grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+        {/* --- CONTROLE DE PONTOS --- */}
+        <div className="bg-white rounded-3xl border border-slate-200 overflow-hidden shadow-sm">
+          <div className="p-5 border-b border-slate-100 flex items-center gap-3">
+            <div className="w-10 h-10 bg-primary/5 text-primary rounded-2xl flex items-center justify-center shadow-inner shrink-0">
+              <MapPin size={20} />
+            </div>
+            <div>
+              <h3 className="text-sm font-semibold text-slate-800 tracking-tight">Controle de Pontos</h3>
+              <p className="text-[10px] text-slate-400 font-medium uppercase tracking-widest">Pontos M, P, V</p>
+            </div>
+          </div>
+          <div className="p-5">
+            <div className="grid grid-cols-3 gap-3">
+              {/* Ponto M */}
+              <div className="flex flex-col items-center gap-2 p-3 bg-slate-50 rounded-2xl border border-slate-100 shadow-inner focus-within:ring-2 focus-within:ring-primary/20 focus-within:border-primary transition-all">
+                <div className="w-10 h-10 bg-blue-50 text-blue-500 rounded-xl flex items-center justify-center font-black text-base shadow-inner">M</div>
+                <label className="text-[9px] uppercase tracking-widest font-semibold text-slate-500">Pontos M</label>
+                <input
+                  type="text"
+                  value={pointsState.m || ''}
+                  onChange={(e) => setPointsState(prev => ({ ...prev, m: e.target.value }))}
+                  className="w-full text-center text-xs font-heading font-black text-slate-main bg-transparent outline-none placeholder:text-slate-300 break-all"
+                  placeholder="M-0000"
+                />
+              </div>
+              {/* Ponto P */}
+              <div className="flex flex-col items-center gap-2 p-3 bg-slate-50 rounded-2xl border border-slate-100 shadow-inner focus-within:ring-2 focus-within:ring-primary/20 focus-within:border-primary transition-all">
+                <div className="w-10 h-10 bg-emerald-50 text-emerald-500 rounded-xl flex items-center justify-center font-black text-base shadow-inner">P</div>
+                <label className="text-[9px] uppercase tracking-widest font-semibold text-slate-500">Pontos P</label>
+                <input
+                  type="text"
+                  value={pointsState.p || ''}
+                  onChange={(e) => setPointsState(prev => ({ ...prev, p: e.target.value }))}
+                  className="w-full text-center text-xs font-heading font-black text-slate-main bg-transparent outline-none placeholder:text-slate-300 break-all"
+                  placeholder="P-0000"
+                />
+              </div>
+              {/* Ponto V */}
+              <div className="flex flex-col items-center gap-2 p-3 bg-slate-50 rounded-2xl border border-slate-100 shadow-inner focus-within:ring-2 focus-within:ring-primary/20 focus-within:border-primary transition-all">
+                <div className="w-10 h-10 bg-amber-50 text-amber-500 rounded-xl flex items-center justify-center font-black text-base shadow-inner">V</div>
+                <label className="text-[9px] uppercase tracking-widest font-semibold text-slate-500">Pontos V</label>
+                <input
+                  type="text"
+                  value={pointsState.v || ''}
+                  onChange={(e) => setPointsState(prev => ({ ...prev, v: e.target.value }))}
+                  className="w-full text-center text-xs font-heading font-black text-slate-main bg-transparent outline-none placeholder:text-slate-300 break-all"
+                  placeholder="V-0000"
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* --- MOVIMENTAÇÕES FINANCEIRAS --- */}
+        <div className="lg:col-span-2">
         <div className="bg-white rounded-3xl border border-slate-200 overflow-hidden shadow-sm">
           <div className="p-5 border-b border-slate-100 flex items-center justify-between gap-4">
             <div className="flex items-center gap-3">
@@ -1039,7 +1096,10 @@ const ProjectWorkflow: React.FC<ProjectWorkflowProps> = ({
           )}
         </div>
       </div>
+      </div>
       {/* ============================================================ */}
+
+
 
       {showDocPreview && (
         <DocumentPreview
