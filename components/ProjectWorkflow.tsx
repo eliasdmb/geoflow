@@ -159,6 +159,7 @@ const ProjectWorkflow: React.FC<ProjectWorkflowProps> = ({
   const [hasTriedInit, setHasTriedInit] = useState(false);
   const [checklistState, setChecklistState] = useState<Record<string, boolean>>({});
   const [pointsState, setPointsState] = useState({ m: '', p: '', v: '' });
+  const [isSavingPoints, setIsSavingPoints] = useState(false);
   const [newExpense, setNewExpense] = useState({ 
     date: new Date().toISOString().split('T')[0], 
     item: '', 
@@ -168,6 +169,8 @@ const ProjectWorkflow: React.FC<ProjectWorkflowProps> = ({
   const [isAddingExpense, setIsAddingExpense] = useState(false);
 
   const autoSaveTimeoutRef = useRef<number | null>(null);
+  const pointsSaveTimeoutRef = useRef<number | null>(null);
+  const lastSavedPointsRef = useRef<string>('');
 
 
 
@@ -226,29 +229,62 @@ const ProjectWorkflow: React.FC<ProjectWorkflowProps> = ({
     }
   }, [selectedStep?.id, hasChecklist, isPointControlStep]);
 
-  // ... (keep existing useEffects regarding autoSave and key handlers) ...
-  // Re-implementing autoSave logic for context completeness
+  // Initialize pointsState from the POINT_CONTROL step on mount and project change
+  const pointControlStep = steps.find(s => s.step_id === WorkflowStepId.POINT_CONTROL);
   useEffect(() => {
-    if (!selectedStep || (!isCriStep && !isPointControlStep)) return;
+    if (!pointControlStep) return;
+    try {
+      const parsed = JSON.parse(pointControlStep.notes || '{}');
+      const initialPoints = typeof parsed === 'object' && parsed !== null
+        ? { m: parsed.m || '', p: parsed.p || '', v: parsed.v || '' }
+        : { m: '', p: '', v: '' };
+      setPointsState(initialPoints);
+      lastSavedPointsRef.current = JSON.stringify(initialPoints);
+    } catch {
+      setPointsState({ m: '', p: '', v: '' });
+      lastSavedPointsRef.current = JSON.stringify({ m: '', p: '', v: '' });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [project.id]);
 
-    // For Point Control, we use pointsState instead of notes. Notes still contains stringified points.
-    let currentDataToSave = isPointControlStep ? JSON.stringify(pointsState) : notes;
-
-    if (currentDataToSave === lastSavedNotes) {
+  // Auto-save for CRI notes
+  useEffect(() => {
+    if (!selectedStep || !isCriStep) return;
+    if (notes === lastSavedNotes) {
       setIsSavingNotes(false);
       return;
     }
     setIsSavingNotes(true);
     if (autoSaveTimeoutRef.current) window.clearTimeout(autoSaveTimeoutRef.current);
     autoSaveTimeoutRef.current = window.setTimeout(() => {
-      onUpdateStep(selectedStep.id!, selectedStep.status, currentDataToSave);
-      setLastSavedNotes(currentDataToSave);
+      onUpdateStep(selectedStep.id!, selectedStep.status, notes);
+      setLastSavedNotes(notes);
       setIsSavingNotes(false);
     }, 1500);
     return () => {
       if (autoSaveTimeoutRef.current) window.clearTimeout(autoSaveTimeoutRef.current);
     };
-  }, [notes, pointsState, selectedStep?.id, isCriStep, isPointControlStep, selectedStep?.status, onUpdateStep]);
+  }, [notes, selectedStep?.id, isCriStep, selectedStep?.status, onUpdateStep]);
+
+  // Auto-save for points (bottom widget) — saves to the POINT_CONTROL step
+  useEffect(() => {
+    if (!pointControlStep?.id) return;
+    const currentJson = JSON.stringify(pointsState);
+    if (currentJson === lastSavedPointsRef.current) {
+      setIsSavingPoints(false);
+      return;
+    }
+    setIsSavingPoints(true);
+    if (pointsSaveTimeoutRef.current) window.clearTimeout(pointsSaveTimeoutRef.current);
+    pointsSaveTimeoutRef.current = window.setTimeout(() => {
+      onUpdateStep(pointControlStep.id!, pointControlStep.status, currentJson);
+      lastSavedPointsRef.current = currentJson;
+      setIsSavingPoints(false);
+    }, 1500);
+    return () => {
+      if (pointsSaveTimeoutRef.current) window.clearTimeout(pointsSaveTimeoutRef.current);
+    };
+  }, [pointsState, pointControlStep?.id, pointControlStep?.status, onUpdateStep]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -843,14 +879,25 @@ const ProjectWorkflow: React.FC<ProjectWorkflowProps> = ({
 
         {/* --- CONTROLE DE PONTOS --- */}
         <div className="bg-white rounded-3xl border border-slate-200 overflow-hidden shadow-sm">
-          <div className="p-5 border-b border-slate-100 flex items-center gap-3">
-            <div className="w-10 h-10 bg-primary/5 text-primary rounded-2xl flex items-center justify-center shadow-inner shrink-0">
-              <MapPin size={20} />
+          <div className="p-5 border-b border-slate-100 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-primary/5 text-primary rounded-2xl flex items-center justify-center shadow-inner shrink-0">
+                <MapPin size={20} />
+              </div>
+              <div>
+                <h3 className="text-sm font-semibold text-slate-800 tracking-tight">Controle de Pontos</h3>
+                <p className="text-[10px] text-slate-400 font-medium uppercase tracking-widest">Pontos M, P, V</p>
+              </div>
             </div>
-            <div>
-              <h3 className="text-sm font-semibold text-slate-800 tracking-tight">Controle de Pontos</h3>
-              <p className="text-[10px] text-slate-400 font-medium uppercase tracking-widest">Pontos M, P, V</p>
-            </div>
+            {isSavingPoints ? (
+              <span className="flex items-center gap-1.5 text-[9px] font-semibold text-amber-500 uppercase tracking-tighter bg-amber-50 px-2.5 py-1 rounded-lg">
+                <Loader2 size={10} className="animate-spin" /> Salvando
+              </span>
+            ) : lastSavedPointsRef.current !== JSON.stringify({ m: '', p: '', v: '' }) || (pointsState.m || pointsState.p || pointsState.v) ? (
+              <span className="flex items-center gap-1.5 text-[9px] font-semibold text-primary uppercase tracking-tighter bg-primary/5 px-2.5 py-1 rounded-lg">
+                <CloudCheck size={12} /> Salvo
+              </span>
+            ) : null}
           </div>
           <div className="p-5">
             <div className="grid grid-cols-3 gap-3">
