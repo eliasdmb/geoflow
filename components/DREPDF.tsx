@@ -1,48 +1,116 @@
 import React from 'react';
 import { Document, Page, Text, View, StyleSheet } from '@react-pdf/renderer';
 
+const GREEN = '#16a34a';
+const GREEN_LIGHT = '#dcfce7';
+const DARK = '#0f172a';
+const GRAY = '#64748b';
+const BORDER = '#e2e8f0';
+
 const styles = StyleSheet.create({
   page: {
-    padding: 30,
+    paddingTop: 28,
+    paddingBottom: 28,
+    paddingLeft: 24,
+    paddingRight: 24,
     fontFamily: 'Helvetica',
     fontSize: 8,
+    backgroundColor: '#ffffff',
   },
-  header: {
-    fontSize: 18,
-    marginBottom: 10,
-    textAlign: 'center',
+  accentBar: {
+    height: 5,
+    backgroundColor: GREEN,
+    marginBottom: 14,
+    borderRadius: 2,
+  },
+  headerSection: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 16,
+    paddingBottom: 12,
+    borderBottomWidth: 2,
+    borderBottomColor: BORDER,
+    borderBottomStyle: 'solid',
+  },
+  companyBlock: {
+    flexDirection: 'column',
+  },
+  companyName: {
+    fontSize: 16,
     fontWeight: 'bold',
+    color: DARK,
+    letterSpacing: -0.5,
+    marginBottom: 2,
   },
-  subheader: {
-    fontSize: 10,
-    marginBottom: 15,
-    textAlign: 'center',
-    color: '#666',
+  companySub: {
+    fontSize: 8,
+    fontWeight: 'bold',
+    color: GREEN,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    marginBottom: 4,
+  },
+  companyInfo: {
+    fontSize: 7,
+    color: GRAY,
+  },
+  docTitleBlock: {
+    flexDirection: 'column',
+    alignItems: 'flex-end',
+  },
+  docTitle: {
+    fontSize: 13,
+    fontWeight: 'bold',
+    color: DARK,
+    textAlign: 'right',
+    marginBottom: 3,
+  },
+  docSubtitle: {
+    fontSize: 8,
+    color: GRAY,
+    textAlign: 'right',
+    marginBottom: 2,
+  },
+  badge: {
+    backgroundColor: GREEN_LIGHT,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 4,
+    marginTop: 4,
+  },
+  badgeText: {
+    fontSize: 7,
+    fontWeight: 'bold',
+    color: GREEN,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   table: {
     display: 'flex',
     width: 'auto',
     borderStyle: 'solid',
     borderWidth: 1,
-    borderColor: '#bfbfbf',
+    borderColor: BORDER,
     borderRightWidth: 0,
     borderBottomWidth: 0,
+    borderRadius: 4,
   },
   tableRow: {
     margin: 'auto',
     flexDirection: 'row',
   },
   headerRow: {
-    backgroundColor: '#f0f0f0',
-    fontWeight: 'bold',
+    backgroundColor: DARK,
+  },
+  sectionRow: {
+    backgroundColor: '#f1f5f9',
   },
   totalRow: {
-    backgroundColor: '#f9f9f9',
-    fontWeight: 'bold',
+    backgroundColor: GREEN_LIGHT,
   },
   finalRow: {
-    backgroundColor: '#e3f2fd',
-    fontWeight: 'bold',
+    backgroundColor: GREEN,
   },
   tableColLabel: {
     width: '15%',
@@ -50,7 +118,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderLeftWidth: 0,
     borderTopWidth: 0,
-    borderColor: '#bfbfbf',
+    borderColor: BORDER,
     padding: 4,
   },
   tableCol: {
@@ -59,8 +127,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderLeftWidth: 0,
     borderTopWidth: 0,
-    borderColor: '#bfbfbf',
-    padding: 2,
+    borderColor: BORDER,
+    padding: 3,
     textAlign: 'right',
   },
   tableColTotal: {
@@ -69,21 +137,58 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderLeftWidth: 0,
     borderTopWidth: 0,
-    borderColor: '#bfbfbf',
-    padding: 2,
+    borderColor: BORDER,
+    padding: 3,
     textAlign: 'right',
     fontWeight: 'bold',
   },
   cellText: {
     fontSize: 7,
+    color: '#334155',
   },
   cellTextBold: {
     fontSize: 7,
     fontWeight: 'bold',
+    color: '#334155',
+  },
+  cellTextHeader: {
+    fontSize: 7,
+    fontWeight: 'bold',
+    color: '#ffffff',
+  },
+  cellTextFinal: {
+    fontSize: 7,
+    fontWeight: 'bold',
+    color: '#ffffff',
+  },
+  cellTextSection: {
+    fontSize: 7,
+    fontWeight: 'bold',
+    color: DARK,
+  },
+  cellTextTotal: {
+    fontSize: 7,
+    fontWeight: 'bold',
+    color: '#166534',
   },
   negative: {
-    color: '#d32f2f',
-  }
+    color: '#dc2626',
+  },
+  footer: {
+    marginTop: 16,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  footerText: {
+    fontSize: 6,
+    color: '#94a3b8',
+  },
+  footerBrand: {
+    fontSize: 6,
+    color: GREEN,
+    fontWeight: 'bold',
+  },
 });
 
 const formatCurrency = (value: number) => {
@@ -139,17 +244,33 @@ const DREPDF: React.FC<DREPDFProps> = ({ dreData, year, scope }) => {
   return (
     <Document>
       <Page size="A4" orientation="landscape" style={styles.page}>
-        <Text style={styles.header}>Demonstração do Resultado do Exercício (DRE)</Text>
-        <Text style={styles.subheader}>Ano: {year} | Escopo: {scope === 'ALL' ? 'Todos' : scope}</Text>
+        {/* Barra de destaque verde */}
+        <View style={styles.accentBar} />
+
+        {/* Cabeçalho com dados da empresa */}
+        <View style={styles.headerSection}>
+          <View style={styles.companyBlock}>
+            <Text style={styles.companyName}>Metrica Agro</Text>
+            <Text style={styles.companySub}>Serviços Agronômicos e Geomensura</Text>
+            <Text style={styles.companyInfo}>CNPJ: 22.827.795/0001-49 | metrica.agro@gmail.com | (64) 99994-0677</Text>
+          </View>
+          <View style={styles.docTitleBlock}>
+            <Text style={styles.docTitle}>DRE — Demonstração do Resultado</Text>
+            <Text style={styles.docSubtitle}>Ano: {year} | Escopo: {scope === 'ALL' ? 'Todos' : scope}</Text>
+            <View style={styles.badge}>
+              <Text style={styles.badgeText}>Relatório Financeiro Anual</Text>
+            </View>
+          </View>
+        </View>
 
         <View style={styles.table}>
           {/* Table Header */}
           <View style={[styles.tableRow, styles.headerRow]}>
-            <View style={styles.tableColLabel}><Text style={styles.cellTextBold}>Descrição</Text></View>
+            <View style={styles.tableColLabel}><Text style={styles.cellTextHeader}>Descrição</Text></View>
             {months.map(m => (
-              <View key={m} style={styles.tableCol}><Text style={styles.cellTextBold}>{m}</Text></View>
+              <View key={m} style={styles.tableCol}><Text style={styles.cellTextHeader}>{m}</Text></View>
             ))}
-            <View style={styles.tableColTotal}><Text style={styles.cellTextBold}>Total</Text></View>
+            <View style={styles.tableColTotal}><Text style={styles.cellTextHeader}>Total</Text></View>
           </View>
 
           {/* DRE Rows */}
@@ -174,7 +295,7 @@ const DREPDF: React.FC<DREPDFProps> = ({ dreData, year, scope }) => {
             style={styles.totalRow} 
           />
 
-          <DRERowPDF label="(-) DESPESAS OPERACIONAIS" values={dreData.structure.operatingExpenses.map((v, i) => v + dreData.structure.personnel[i])} isNegative style={styles.headerRow} />
+          <DRERowPDF label="(-) DESPESAS OPERACIONAIS" values={dreData.structure.operatingExpenses.map((v, i) => v + dreData.structure.personnel[i])} isNegative style={styles.sectionRow} />
           {Object.entries(dreData.details.operating).map(([cat, vals]) => (
             <DRERowPDF key={cat} label={cat} values={vals as number[]} isSubItem isNegative />
           ))}
@@ -200,8 +321,9 @@ const DREPDF: React.FC<DREPDFProps> = ({ dreData, year, scope }) => {
           />
         </View>
 
-        <View style={{ marginTop: 20 }}>
-          <Text style={{ fontSize: 6, color: '#999' }}>* Valores em Reais (BRL). Gerado automaticamente em {new Date().toLocaleDateString('pt-BR')}</Text>
+        <View style={styles.footer}>
+          <Text style={styles.footerText}>* Valores em Reais (BRL). Gerado automaticamente em {new Date().toLocaleDateString('pt-BR')}</Text>
+          <Text style={styles.footerBrand}>Metrica Agro — GeoFlow</Text>
         </View>
       </Page>
     </Document>

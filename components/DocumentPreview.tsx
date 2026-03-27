@@ -12,7 +12,9 @@ import {
   MapPin,
   Phone,
   Mail,
-  Globe
+  Globe,
+  UserPlus,
+  Trash2
 } from 'lucide-react';
 import {
   Project,
@@ -68,6 +70,34 @@ const CHECKLIST_CAR_GO = [
   { id: '4', label: 'e-mail' }
 ];
 
+const MONTIVIDIU_CNS = '02.456-1';
+
+const CHECKLIST_MONTIVIDIU = [
+  { id: '1', label: 'REQUERIMENTO solicitando a AVERBAÇÃO da CERTIFICAÇÃO.' },
+  { id: '2', label: 'CERTIFICAÇÃO emitida pelo INCRA/SIGEF.' },
+  { id: '3', label: 'ANUÊNCIA / DECLARAÇÃO de limites de todos os confrontantes.' },
+  { id: '4', label: 'MAPA expedido pelo SIGEF.' },
+  { id: '5', label: 'PROVA DE ART quitada.' },
+  { id: '6', label: 'LAUDO TÉCNICO do engenheiro.' },
+  { id: '7', label: 'CCIR atualizado.' },
+  { id: '8', label: 'ITR – últimos 05 anos.' },
+  { id: '9', label: 'Procuração (se aplicável).' },
+  { id: '10', label: 'CAR (Cadastro Ambiental Rural).' },
+];
+
+const CHECKLIST_GENERIC = [
+  { id: '1', label: 'REQUERIMENTO solicitando a AVERBAÇÃO da CERTIFICAÇÃO.' },
+  { id: '2', label: 'CERTIFICAÇÃO emitida pelo INCRA/SIGEF.' },
+  { id: '3', label: 'ANUÊNCIA / DECLARAÇÃO de limites de todos os confrontantes.' },
+  { id: '4', label: 'MAPA expedido pelo SIGEF.' },
+  { id: '5', label: 'PROVA DE ART quitada.' },
+  { id: '6', label: 'LAUDO TÉCNICO do engenheiro responsável.' },
+  { id: '7', label: 'CCIR atualizado.' },
+  { id: '8', label: 'ITR – últimos 05 anos.' },
+  { id: '9', label: 'Procuração (se aplicável).' },
+  { id: '10', label: 'CAR (Cadastro Ambiental Rural).' },
+];
+
 interface BudgetItem {
   id: string;
   description: string;
@@ -95,6 +125,7 @@ interface DocumentPreviewProps {
   onApprove?: (docNumber: string) => void;
   onReject?: () => void;
   onUpdateBudgetItems?: (items: BudgetItem[]) => void;
+  onUpdateStepNotes?: (notes: string) => void;
   userName?: string;
   onReceiptReceived?: (transaction: Partial<FinancialTransaction>) => void;
 }
@@ -162,6 +193,7 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({
   onApprove,
   onReject,
   onUpdateBudgetItems,
+  onUpdateStepNotes,
   userName,
   onReceiptReceived
 }) => {
@@ -270,6 +302,35 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({
 
   const [showEditor, setShowEditor] = useState(false);
   const [isSavingValues, setIsSavingValues] = useState(false);
+
+  // Additional owners for Laudo de Georreferenciamento and Requerimento para o Cartório - item 3
+  const isMultiOwnerStep = step.label === 'Laudo Técnico' || step.label === 'Laudo de Georreferenciamento' || step.label === 'Requerimento para o Cartório';
+
+  const [additionalOwners, setAdditionalOwners] = useState<Client[]>(() => {
+    if (!isMultiOwnerStep) return [];
+    try {
+      const parsed = JSON.parse(step.notes || '{}');
+      const ids: string[] = parsed.additional_owner_ids || [];
+      return ids.map(id => allClients.find(c => c.id === id)).filter(Boolean) as Client[];
+    } catch {
+      return [];
+    }
+  });
+  const [selectedOwnerToAdd, setSelectedOwnerToAdd] = useState('');
+
+  // Auto-save additional owner IDs to step notes
+  useEffect(() => {
+    if (!isMultiOwnerStep || !onUpdateStepNotes) return;
+    const ids = additionalOwners.map(o => o.id);
+    let existingData: Record<string, unknown> = {};
+    try {
+      existingData = JSON.parse(step.notes || '{}');
+      if (typeof existingData !== 'object' || existingData === null) existingData = {};
+    } catch { /* ignore */ }
+    const newNotes = JSON.stringify({ ...existingData, additional_owner_ids: ids });
+    onUpdateStepNotes(newNotes);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [additionalOwners]);
 
   const displayProfessional = professional || {
     name: 'NÃO ATRIBUÍDO',
@@ -462,6 +523,8 @@ Serviço executado conforme Normas Técnicas do INCRA (3ª Edição).`;
       case 'Laudo Técnico':
       case 'Laudo de Georreferenciamento':
         if (!professional) return "Profissional não atribuído para este laudo.";
+        const allOwners = [{ name: client.name, cpf_cnpj: client.cpf_cnpj, address: formattedClientAddress }, ...additionalOwners.map(o => ({ name: o.name, cpf_cnpj: o.cpf_cnpj, address: typeof o.address === 'string' ? o.address : `${o.address?.street || ''}, ${o.address?.number || 'S/N'}, ${o.address?.city || ''}` }))];
+        const ownerLines = allOwners.map((o, i) => `${i > 0 ? '\n' : ''}Nome:\t${o.name}\nCPF:\t${o.cpf_cnpj}\nEndereço:\t     ${o.address}`).join('\n---\n');
         return `1.\tIDENTIFICAÇÃO DO PROFISSIONAL RESPONSÁVEL
 Nome:\t${displayProfessional.name}
 CREA:\t${displayProfessional.crea}\tCPF:\t${displayProfessional.cpf}
@@ -477,9 +540,7 @@ CRI:\t${selectedRegistry?.name || ''}
 Comarca:\t${property.comarca || property.municipality}              Cód. Incra:\t${property.incra_code || ''}
 
 3.\tIDENTIFICAÇÃO DO PROPRIETÁRIO
-Nome:\t${client.name}
-CPF:\t${client.cpf_cnpj}
-Endereço:\t     ${formattedClientAddress}
+${ownerLines}
 
 4.\tDeclaração Técnica
 
@@ -523,19 +584,28 @@ ${registryMunicipality} - GO, ${today}.`;
       case 'Orçamento':
         return `Resumo: Execução de Georreferenciamento para o imóvel ${property.name}.\nValor Total: R$ ${totalFinal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n\nEste documento detalhado está disponível na visualização formatada.`;
 
-      case 'Requerimento para o Cartório':
+      case 'Requerimento para o Cartório': {
+        const allOwners2 = [client, ...additionalOwners];
+        const getAddr = (o: Client) => typeof o.address === 'string' ? o.address : `${(o.address as any)?.street || ''}, ${(o.address as any)?.number || 'S/N'}, ${(o.address as any)?.city || ''}`;
+
         if (selectedRegistry?.cns === '02.612-0') {
           const certNumber = selectedCertification?.cert_number || project.certification_number || '______________';
+          const signersText = allOwners2.map(o =>
+            `${o.name.toUpperCase()}, ${(o as any).nationality || 'brasileiro'}, ${(o as any).marital_status || 'casado'}, ${(o as any).profession || 'agropecuarista'}, portador do CPF nº. ${o.cpf_cnpj}, residente e domiciliado em ${getAddr(o)}`
+          ).join(';');
           return `Ilustríssimo Sr. Oficial do Registro de Imóveis da Comarca de Rio Verde, Estado de Goiás.
 
-${client.name.toUpperCase()}, ${client.nationality || 'brasileiro'}, ${client.marital_status || 'casado'}, ${client.profession || 'agropecuarista'}, portador do CPF nº. ${client.cpf_cnpj}, residente e domiciliado em ${formattedClientAddress}, proprietário do imóvel rural denominado ${property.name.toUpperCase()}, localizado no município de Rio Verde/GO, devidamente inscrito no Serviço de Registro de Imóveis da comarca de Rio Verde/GO, sob a matrícula nº ${property.registration_number}, cadastrado no INCRA sob o nº ${property.incra_code || '________________'}, abaixo assinado, vem perante V. Sra., requerer a averbação do Georreferenciamento do referido imóvel acima descrito, conforme certificação no SIGEF/INCRA nº ${certNumber}, com a área de ${property.area_ha} ha de minha propriedade e declarar, sob pena de responsabilidade civil e criminal, que não houve alteração das divisas existentes dos imóveis confinantes especificados nas Plantas e memoriais descritivos em anexo e que foram respeitados os direitos dos confrontantes, conforme § 14 do artigo 213, da lei nº 6.015/73.`;
+${signersText}, proprietário(s) do imóvel rural denominado ${property.name.toUpperCase()}, localizado no município de Rio Verde/GO, devidamente inscrito no Serviço de Registro de Imóveis da comarca de Rio Verde/GO, sob a matrícula nº ${property.registration_number}, cadastrado no INCRA sob o nº ${property.incra_code || '________________'}, abaixo assinado(s), vem perante V. Sra., requerer a averbação do Georreferenciamento do referido imóvel acima descrito, conforme certificação no SIGEF/INCRA nº ${certNumber}, com a área de ${property.area_ha} ha de minha propriedade e declarar, sob pena de responsabilidade civil e criminal, que não houve alteração das divisas existentes dos imóveis confinantes especificados nas Plantas e memoriais descritivos em anexo e que foram respeitados os direitos dos confrontantes, conforme § 14 do artigo 213, da lei nº 6.015/73.`;
         }
 
         if (selectedRegistry?.cns === '02.648-4') {
+          const signersText2 = allOwners2.map(o =>
+            `${o.name.toUpperCase()}, Brasileiro, ${(o as any).marital_status || ''}, ${(o as any).profession || ''}, CPF: ${o.cpf_cnpj}, residente e domiciliado na ${getAddr(o)}, com e-mail: ${o.email || ''} e telefone: ${o.phone || ''}`
+          ).join(';');
           return `Ilma. Sra.
 Oficial do Registro de Imóveis e Anexos de Montividiu/GO
 
-Eu, ${client.name.toUpperCase()}, Brasileiro, ${client.marital_status || ''}, ${client.profession || ''}, CPF: ${client.cpf_cnpj}, residente e domiciliado na ${formattedClientAddress}, com e-mail: ${client.email} e telefone: ${client.phone}, venho requerer à V.S. que se digne a REGISTRAR/AVERBAR no Livro 02, matrícula(s): M. ${property.registration_number}, Registro Geral do SRI desta Comarca de Montividiu/GO, com emissão de certidão(ões), o(s) seguinte(s):
+${signersText2}, venho requerer à V.S. que se digne a REGISTRAR/AVERBAR no Livro 02, matrícula(s): M. ${property.registration_number}, Registro Geral do SRI desta Comarca de Montividiu/GO, com emissão de certidão(ões), o(s) seguinte(s):
 
 1.\tGeorreferenciamento de Imóvel Rural - ${property.name.toUpperCase()}.
 Certificação SIGEF/INCRA: ${selectedCertification?.cert_number || project.certification_number || ''}
@@ -545,22 +615,25 @@ Data da Certificação: ${formatDate(selectedCertification?.cert_date || project
 Nestes Termos,
 Pede Deferimento.`;
         }
+
         const genericRegistryName = selectedRegistry?.name || 'Registro de Imóveis competente';
         const genericRegistryCity = selectedRegistry?.municipality || property.municipality || '__________';
         const genericCertNumber = selectedCertification?.cert_number || project.certification_number || '______________';
+        const signersText3 = allOwners2.map((o, i) =>
+          `${o.name.toUpperCase()}, ${(o as any).nationality || 'brasileiro'}, ${(o as any).marital_status || 'casado'}, ${(o as any).profession || 'produtor rural'}, portador do CPF/CNPJ nº ${o.cpf_cnpj}, residente e domiciliado em ${getAddr(o)}`
+        ).join(';');
         return `Ilustríssimo(a) Sr(a). Oficial do ${genericRegistryName}, Comarca de ${genericRegistryCity}/GO.
 
-${client.name.toUpperCase()}, ${client.nationality || 'brasileiro'}, ${client.marital_status || 'casado'}, ${client.profession || 'produtor rural'}, portador do CPF/CNPJ nº ${client.cpf_cnpj}, residente e domiciliado em ${formattedClientAddress}, proprietário do imóvel rural denominado ${property.name.toUpperCase()}, localizado no município de ${property.municipality}/GO, inscrito sob a matrícula nº ${property.registration_number}, cadastrado no INCRA sob o nº ${property.incra_code || '________________'}, vem, respeitosamente, requerer a Vossa Senhoria a averbação do georreferenciamento do imóvel acima descrito, conforme Certificação SIGEF/INCRA nº ${genericCertNumber}, com área de ${property.area_ha} ha.
+${signersText3}, proprietário(s) do imóvel rural denominado ${property.name.toUpperCase()}, localizado no município de ${property.municipality}/GO, inscrito sob a matrícula nº ${property.registration_number}, cadastrado no INCRA sob o nº ${property.incra_code || '________________'}, vem, respeitosamente, requerer a Vossa Senhoria a averbação do georreferenciamento do imóvel acima descrito, conforme Certificação SIGEF/INCRA nº ${genericCertNumber}, com área de ${property.area_ha} ha.
 
-Declara, sob as penas da lei, que não houve alteração das divisas reais e efetivas do imóvel registrado, bem como foram respeitados os direitos dos confrontantes especificados nas plantas e memoriais descritivos em anexo.
+Declara(m), sob as penas da lei, que não houve alteração das divisas reais e efetivas do imóvel registrado, bem como foram respeitados os direitos dos confrontantes especificados nas plantas e memoriais descritivos em anexo.
 
 Nestes Termos,
 Pede Deferimento.
 
 
-${client.name.toUpperCase()}
-CPF/CNPJ: ${client.cpf_cnpj}
-Requerente`;
+${allOwners2.map(o => `${o.name.toUpperCase()}\nCPF/CNPJ: ${o.cpf_cnpj}\nRequerente`).join(';')}`;
+      }
 
       case 'Documentação (Checklist)':
         const checklistArt = selectedCertification?.art_number || project?.art_number || 'N/A';
@@ -571,13 +644,15 @@ Requerente`;
             const registryCns = registry?.cns;
             const isCarGo = service?.name === 'CAR - Cadastro ambiental Rural - SIGCAR GO';
 
-            let activeChecklist = CHECKLIST_RIO_VERDE;
+            let activeChecklist = CHECKLIST_GENERIC;
             if (isCarGo) {
               activeChecklist = CHECKLIST_CAR_GO;
             } else if (registryCns === RIO_VERDE_2_CNS) {
               activeChecklist = CHECKLIST_RIO_VERDE_2;
             } else if (registryCns === RIO_VERDE_CNS) {
               activeChecklist = CHECKLIST_RIO_VERDE;
+            } else if (registryCns === MONTIVIDIU_CNS) {
+              activeChecklist = CHECKLIST_MONTIVIDIU;
             }
             return activeChecklist.map(item => `[${checklistState[item.id] ? 'X' : ' '}] ${item.label}`).join('\n');
           } catch {
@@ -807,14 +882,15 @@ Requerente`;
         </div>
 
         {/* HEADER INSTITUCIONAL OCULTO PARA CAPTURA */}
-        <div ref={headerRef} className="absolute -left-[9999px] -top-[9999px] w-[210mm] h-[45mm] p-[20mm] pb-0" style={{ boxSizing: 'border-box' }}>
-          <div className="flex justify-between items-center border-b border-slate-100 pb-6">
-            <div className="flex gap-5 items-center">
-              <img src={logoBase64 || LOGO_URL} alt="Logo" className="h-20 w-auto object-contain" crossOrigin="anonymous" />
-              <div className="flex flex-col">
-                <h1 className="text-xl font-black uppercase tracking-tighter text-slate-900 leading-none mb-1">Metrica Agro</h1>
-                <p className="text-[8pt] font-black uppercase tracking-widest text-primary mb-1">Serviços Agronomicos e Geomensura</p>
-                <div className="text-[6pt] text-slate-500 font-bold leading-tight space-y-0.5">
+        <div ref={headerRef} className="absolute -left-[9999px] -top-[9999px] w-[210mm]" style={{ boxSizing: 'border-box', backgroundColor: '#ffffff' }}>
+          <div style={{ height: '5px', backgroundColor: '#16a34a', width: '100%' }}></div>
+          <div className="flex justify-between items-center" style={{ padding: '10mm 15mm 10mm 15mm', borderBottom: '2px solid #e2e8f0' }}>
+            <div className="flex items-center" style={{ gap: '20px' }}>
+              <img src={logoBase64 || LOGO_URL} alt="Logo" style={{ height: '100px', width: 'auto', objectFit: 'contain' }} crossOrigin="anonymous" />
+              <div style={{ paddingLeft: '16px', borderLeft: '4px solid #16a34a' }}>
+                <h1 style={{ fontSize: '20pt', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '-0.03em', color: '#0f172a', lineHeight: 1.1, marginBottom: '5px' }}>Metrica Agro</h1>
+                <p style={{ fontSize: '9pt', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.1em', color: '#16a34a', marginBottom: '7px' }}>Serviços Agronômicos e Geomensura</p>
+                <div style={{ fontSize: '7.5pt', color: '#64748b', fontWeight: 700, lineHeight: 1.6 }}>
                   <p>CNPJ: 22.827.795/0001-49</p>
                   <p>E-mail: metrica.agro@gmail.com | WhatsApp: (64) 99994-0677</p>
                 </div>
@@ -969,21 +1045,23 @@ Requerente`;
                 minHeight: isGenerating ? 'auto' : '297mm',
                 padding: isGenerating
                   ? '0'
-                  : '45mm 10mm 10mm 10mm' // Mínimo seguro de 10mm, mantendo 45mm no topo
+                  : '56mm 10mm 10mm 10mm' // Aumentado para acomodar logo maior
               }}
             >
               {/* HEADER INSTITUCIONAL (VISÍVEL APENAS NA TELA) */}
               {!isGenerating && (
                 <div
-                  className={`absolute top-0 left-0 right-0 h-[45mm] flex items-center px-[25mm] border-b border-slate-50 transition-opacity duration-300 ${showHeader ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+                  className={`absolute top-0 left-0 right-0 transition-opacity duration-300 ${showHeader ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+                  style={{ height: '56mm' }}
                 >
-                  <div className="flex justify-between items-center w-full border-b border-slate-100 pb-6">
-                    <div className="flex gap-5 items-center">
-                      <img src={logoBase64 || LOGO_URL} alt="Logo" className="h-20 w-auto object-contain" crossOrigin="anonymous" />
-                      <div className="flex flex-col">
+                  <div style={{ height: '5px', backgroundColor: '#16a34a', width: '100%' }}></div>
+                  <div className="flex items-center h-full" style={{ padding: '0 15mm', borderBottom: '2px solid #e2e8f0' }}>
+                    <div className="flex items-center" style={{ gap: '20px' }}>
+                      <img src={logoBase64 || LOGO_URL} alt="Logo" style={{ height: '100px', width: 'auto', objectFit: 'contain' }} crossOrigin="anonymous" />
+                      <div style={{ paddingLeft: '16px', borderLeft: '4px solid #16a34a' }}>
                         <h1 className="text-xl font-black uppercase tracking-tighter text-slate-900 leading-none mb-1">Metrica Agro</h1>
-                        <p className="text-[8pt] font-black uppercase tracking-widest text-primary mb-1">Serviços Agronomicos e Geomensura</p>
-                        <div className="text-[6pt] text-slate-500 font-bold leading-tight space-y-0.5">
+                        <p className="text-[9pt] font-black uppercase tracking-widest mb-1" style={{ color: '#16a34a', letterSpacing: '0.1em' }}>Serviços Agronômicos e Geomensura</p>
+                        <div className="text-[6.5pt] text-slate-500 font-bold leading-relaxed">
                           <p>CNPJ: 22.827.795/0001-49</p>
                           <p>E-mail: metrica.agro@gmail.com | WhatsApp: (64) 99994-0677</p>
                         </div>
@@ -1249,6 +1327,63 @@ Requerente`;
 
                 </div>
               ) : (step.label === 'Laudo Técnico' || step.label === 'Laudo de Georreferenciamento') ? (
+                <>
+                {/* ── PAINEL: Adicionar Proprietários (fora da área de impressão) ── */}
+                {(() => {
+                  const availableClients = allClients.filter(
+                    c => c.id !== client.id && !additionalOwners.find(o => o.id === c.id)
+                  );
+                  if (isGenerating) return null;
+                  return (
+                    <div data-html2canvas-ignore="true" className="mb-3 p-3 bg-primary/5 border border-primary/20 rounded-2xl flex flex-wrap items-center gap-3">
+                      <div className="flex items-center gap-2 text-[10px] font-bold text-primary uppercase tracking-widest">
+                        <UserPlus size={14} />
+                        <span>Proprietários Adicionais — Item 3</span>
+                      </div>
+                      <div className="flex items-center gap-2 flex-1 min-w-[200px]">
+                        <select
+                          value={selectedOwnerToAdd}
+                          onChange={e => setSelectedOwnerToAdd(e.target.value)}
+                          className="flex-1 px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-semibold text-slate-700 outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+                        >
+                          <option value="">Selecione um proprietário cadastrado...</option>
+                          {availableClients.map(c => (
+                            <option key={c.id} value={c.id}>{c.name} — CPF: {c.cpf_cnpj}</option>
+                          ))}
+                        </select>
+                        <button
+                          onClick={() => {
+                            if (!selectedOwnerToAdd) return;
+                            const found = allClients.find(c => c.id === selectedOwnerToAdd);
+                            if (found) {
+                              setAdditionalOwners(prev => [...prev, found]);
+                              setSelectedOwnerToAdd('');
+                            }
+                          }}
+                          disabled={!selectedOwnerToAdd}
+                          className="flex items-center gap-1.5 px-3 py-1.5 bg-primary text-white text-[10px] font-black rounded-lg hover:bg-primary-dark transition-all disabled:opacity-40 uppercase tracking-widest whitespace-nowrap"
+                        >
+                          <UserPlus size={12} /> Adicionar
+                        </button>
+                      </div>
+                      {additionalOwners.length > 0 && (
+                        <div className="w-full flex flex-wrap gap-2 mt-1">
+                          {additionalOwners.map(o => (
+                            <span key={o.id} className="flex items-center gap-1.5 px-2.5 py-1 bg-white border border-primary/20 text-primary text-[10px] font-semibold rounded-lg">
+                              {o.name}
+                              <button
+                                onClick={() => setAdditionalOwners(prev => prev.filter(x => x.id !== o.id))}
+                                className="text-rose-400 hover:text-rose-600 ml-0.5"
+                              >
+                                <Trash2 size={10} />
+                              </button>
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
                 <div className="space-y-2 leading-tight text-slate-900 w-full" style={{ boxSizing: 'border-box' }}>
 
                   {/* 1. IDENTIFICAÇÃO DO PROFISSIONAL */}
@@ -1301,10 +1436,15 @@ Requerente`;
                   {/* 3. IDENTIFICAÇÃO DO PROPRIETÁRIO */}
                   <div className="border border-slate-900 break-inside-avoid page-break-inside-avoid avoid-break" style={{ breakInside: 'avoid', pageBreakInside: 'avoid' }}>
                     <div className="bg-slate-100 p-1.5 font-bold uppercase border-b border-slate-900 text-[10pt]">3. Identificação do Proprietário</div>
-                    <div className="p-2 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-[10pt]">
-                      <span className="font-bold">Nome:</span> <span>{client.name}</span>
-                      <span className="font-bold">CPF:</span> <span>{client.cpf_cnpj}</span>
-                      <span className="font-bold">Endereço:</span> <span>{typeof client.address === 'string' ? client.address : `${client.address?.street || ''}, ${client.address?.number || 'S/N'}, ${client.address?.city || ''}`}</span>
+                    <div className="p-2 space-y-2 text-[10pt]">
+                      {/* Proprietário principal */}
+                      {[{ name: client.name, cpf_cnpj: client.cpf_cnpj, address: typeof client.address === 'string' ? client.address : `${(client.address as any)?.street || ''}, ${(client.address as any)?.number || 'S/N'}, ${(client.address as any)?.city || ''}` }, ...additionalOwners.map(o => ({ name: o.name, cpf_cnpj: o.cpf_cnpj, address: typeof o.address === 'string' ? o.address : `${(o.address as any)?.street || ''}, ${(o.address as any)?.number || 'S/N'}, ${(o.address as any)?.city || ''}` }))].map((owner, idx) => (
+                        <div key={idx} className={`grid grid-cols-[auto_1fr] gap-x-4 gap-y-0.5 ${idx > 0 ? 'pt-2 border-t border-slate-200' : ''}`}>
+                          <span className="font-bold">Nome:</span> <span className="uppercase">{owner.name}</span>
+                          <span className="font-bold">CPF:</span> <span>{owner.cpf_cnpj}</span>
+                          <span className="font-bold">Endereço:</span> <span>{owner.address}</span>
+                        </div>
+                      ))}
                     </div>
                   </div>
 
@@ -1356,6 +1496,7 @@ Requerente`;
                   </div>
 
                 </div>
+                </>
               ) : step.label === 'RECIBO' ? (
                 <div className="space-y-8 leading-relaxed text-slate-900" style={{ paddingLeft: '20mm', paddingRight: '20mm', paddingBottom: '10mm', boxSizing: 'border-box' }}>
 
@@ -1427,12 +1568,67 @@ Requerente`;
 
                 </div>
               ) : step.label === 'Requerimento para o Cartório' ? (
+                <>
+                {/* ── PAINEL: Adicionar Proprietários (fora da área de impressão) ── */}
+                {(() => {
+                  const availableClients = allClients.filter(
+                    c => c.id !== client.id && !additionalOwners.find(o => o.id === c.id)
+                  );
+                  if (isGenerating) return null;
+                  return (
+                    <div data-html2canvas-ignore="true" className="mb-3 p-3 bg-primary/5 border border-primary/20 rounded-2xl flex flex-wrap items-center gap-3">
+                      <div className="flex items-center gap-2 text-[10px] font-bold text-primary uppercase tracking-widest">
+                        <UserPlus size={14} />
+                        <span>Proprietários Adicionais (Requerentes)</span>
+                      </div>
+                      <div className="flex items-center gap-2 flex-1 min-w-[200px]">
+                        <select
+                          value={selectedOwnerToAdd}
+                          onChange={e => setSelectedOwnerToAdd(e.target.value)}
+                          className="flex-1 px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-semibold text-slate-700 outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+                        >
+                          <option value="">Selecione um proprietário cadastrado...</option>
+                          {availableClients.map(c => (
+                            <option key={c.id} value={c.id}>{c.name} — CPF: {c.cpf_cnpj}</option>
+                          ))}
+                        </select>
+                        <button
+                          onClick={() => {
+                            if (!selectedOwnerToAdd) return;
+                            const found = allClients.find(c => c.id === selectedOwnerToAdd);
+                            if (found) {
+                              setAdditionalOwners(prev => [...prev, found]);
+                              setSelectedOwnerToAdd('');
+                            }
+                          }}
+                          disabled={!selectedOwnerToAdd}
+                          className="flex items-center gap-1.5 px-3 py-1.5 bg-primary text-white text-[10px] font-black rounded-lg hover:bg-primary-dark transition-all disabled:opacity-40 uppercase tracking-widest whitespace-nowrap"
+                        >
+                          <UserPlus size={12} /> Adicionar
+                        </button>
+                      </div>
+                      {additionalOwners.length > 0 && (
+                        <div className="w-full flex flex-wrap gap-2 mt-1">
+                          {additionalOwners.map(o => (
+                            <span key={o.id} className="flex items-center gap-1.5 px-2.5 py-1 bg-white border border-primary/20 text-primary text-[10px] font-semibold rounded-lg">
+                              {o.name}
+                              <button
+                                onClick={() => setAdditionalOwners(prev => prev.filter(x => x.id !== o.id))}
+                                className="text-rose-400 hover:text-rose-600 ml-0.5"
+                              >
+                                <Trash2 size={10} />
+                              </button>
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
                 <div className="flex-1 px-[2mm] pt-0 pb-[5mm]">
                   <div
                     className="whitespace-pre-wrap text-slate-900 text-[12pt] text-justify leading-relaxed border border-slate-900 px-[5mm] pt-0 pb-[10mm] min-h-[150mm] flex flex-col"
-                    style={{
-                      boxSizing: 'border-box'
-                    }}
+                    style={{ boxSizing: 'border-box' }}
                   >
                     <div className="text-center mb-2">
                       <h2 className="text-2xl font-black uppercase tracking-widest text-slate-900">
@@ -1450,19 +1646,22 @@ Requerente`;
                           <p>{getFullDate(customDate, selectedRegistry?.municipality || property.municipality || 'Rio Verde')}</p>
                         </div>
 
-                        <div className="flex justify-center text-center mb-10 break-inside-avoid page-break-inside-avoid">
-                          <div className="flex flex-col items-center w-80">
-                            <div className="h-[30mm]"></div>
-                            <div className="w-full border-t border-slate-900 mb-1"></div>
-                            <p className="text-[10pt] font-black uppercase text-slate-900 leading-tight">{client.name}</p>
-                            <p className="text-[8pt] text-slate-500 font-bold uppercase tracking-widest">Proprietário do Imóvel</p>
-                            <p className="text-[8pt] text-slate-400 font-bold">CPF/CNPJ: {client.cpf_cnpj}</p>
-                          </div>
+                        <div className="flex flex-wrap justify-center gap-12 text-center mb-10 break-inside-avoid page-break-inside-avoid">
+                          {[client, ...additionalOwners].map((owner, idx) => (
+                            <div key={idx} className="flex flex-col items-center min-w-[200px]">
+                              <div className="h-[30mm]"></div>
+                              <div className="w-full border-t border-slate-900 mb-1"></div>
+                              <p className="text-[10pt] font-black uppercase text-slate-900 leading-tight">{owner.name}</p>
+                              <p className="text-[8pt] text-slate-500 font-bold uppercase tracking-widest">Proprietário do Imóvel</p>
+                              <p className="text-[8pt] text-slate-400 font-bold">CPF/CNPJ: {owner.cpf_cnpj}</p>
+                            </div>
+                          ))}
                         </div>
                       </>
                     )}
                   </div>
                 </div>
+                </>
               ) : step.label === 'Documentação (Checklist)' ? (
                 <div className="space-y-3 leading-tight text-slate-900 w-full" style={{ boxSizing: 'border-box' }}>
 
@@ -1511,13 +1710,15 @@ Requerente`;
                           const registryCns = registry?.cns;
                           const isCarGo = service?.name === 'CAR - Cadastro ambiental Rural - SIGCAR GO';
 
-                          let items = CHECKLIST_RIO_VERDE;
+                          let items = CHECKLIST_GENERIC;
                           if (isCarGo) {
                             items = CHECKLIST_CAR_GO;
                           } else if (registryCns === RIO_VERDE_2_CNS) {
                             items = CHECKLIST_RIO_VERDE_2;
                           } else if (registryCns === RIO_VERDE_CNS) {
                             items = CHECKLIST_RIO_VERDE;
+                          } else if (registryCns === MONTIVIDIU_CNS) {
+                            items = CHECKLIST_MONTIVIDIU;
                           }
                           return items.map(item => (
                             <div key={item.id} className="flex items-start gap-2 p-1.5 border-b border-slate-100 last:border-0 break-inside-avoid page-break-inside-avoid">

@@ -11,7 +11,6 @@ import {
   AlertTriangle,
   Printer,
   Loader2,
-  Calendar,
   Phone,
   Mail
 } from 'lucide-react';
@@ -188,55 +187,68 @@ const ClientList: React.FC<ClientListProps> = ({ clients, onSaveClient, onDelete
 
       {/* Template do Relatório PDF */}
       <div className="hidden">
-        <div ref={reportRef} className="p-[20mm] text-slate-900 font-sans" style={{ width: '210mm', boxSizing: 'border-box' }}>
-          <div className="flex justify-between items-center border-b-2 border-slate-800 pb-6 mb-8">
-            <div className="flex items-center gap-4">
+        <div ref={reportRef} className="text-slate-900 font-sans" style={{ width: '210mm', boxSizing: 'border-box', backgroundColor: '#ffffff' }}>
+          {/* Barra de destaque verde */}
+          <div style={{ height: '5px', backgroundColor: '#16a34a', width: '100%' }}></div>
+
+          {/* Cabeçalho */}
+          <div className="flex justify-between items-center" style={{ padding: '10mm 15mm 10mm 15mm', borderBottom: '2px solid #e2e8f0' }}>
+            <div className="flex items-center" style={{ gap: '20px' }}>
               <img
                 src={LOGO_URL}
                 alt="Logo"
-                className="w-16 h-16 object-contain"
+                style={{ height: '100px', width: 'auto', objectFit: 'contain', imageRendering: '-webkit-optimize-contrast' } as React.CSSProperties}
                 crossOrigin="anonymous"
-                style={{ imageRendering: '-webkit-optimize-contrast' }}
               />
-              <div>
-                <h1 className="text-2xl font-black uppercase tracking-tight text-slate-800 leading-none">Relatório Geral de Proprietários</h1>
-                <div className="flex flex-col mt-1 text-primary font-black uppercase tracking-tighter">
-                  <span className="text-sm">MétricaAgro</span>
-                  <span className="text-[9px] text-slate-700">Serviços Agronômicos e Geomensura</span>
+              <div style={{ paddingLeft: '16px', borderLeft: '4px solid #16a34a' }}>
+                <h1 style={{ fontSize: '20pt', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '-0.03em', color: '#0f172a', lineHeight: 1.1, marginBottom: '5px' }}>Metrica Agro</h1>
+                <p style={{ fontSize: '9pt', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.1em', color: '#16a34a', marginBottom: '7px' }}>Serviços Agronômicos e Geomensura</p>
+                <div style={{ fontSize: '7.5pt', color: '#64748b', fontWeight: 700, lineHeight: 1.6 }}>
+                  <p>CNPJ: 22.827.795/0001-49</p>
+                  <p>E-mail: metrica.agro@gmail.com | WhatsApp: (64) 99994-0677</p>
                 </div>
               </div>
             </div>
-            <div className="text-right">
-              <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Emitido em</p>
-              <div className="flex items-center gap-2 text-slate-700 font-bold mt-1 justify-end">
-                <Calendar size={14} className="text-slate-400" />
-                <span>{new Date().toLocaleDateString('pt-BR')}</span>
-              </div>
+            <div className="text-right" style={{ paddingRight: '5mm' }}>
+              <p style={{ fontSize: '8pt', color: '#94a3b8', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '4px' }}>Emitido em</p>
+              <p style={{ fontSize: '11pt', fontWeight: 900, color: '#0f172a' }}>{new Date().toLocaleDateString('pt-BR')}</p>
             </div>
           </div>
 
-          <table className="w-full text-left border-collapse table-auto">
-            <thead className="bg-slate-100">
-              <tr>
-                <th className="p-3 border border-slate-200 text-[10px] font-black uppercase text-slate-600">Nome</th>
-                <th className="p-3 border border-slate-200 text-[10px] font-black uppercase text-slate-600">CPF/CNPJ</th>
-                <th className="p-3 border border-slate-200 text-[10px] font-black uppercase text-slate-600">Endereço</th>
-              </tr>
-            </thead>
-            <tbody>
-              {clients.map(client => (
-                <tr key={client.id} className="border-b border-slate-100">
-                  <td className="p-3 border border-slate-200">
-                    <p className="text-sm font-bold text-slate-800">{client.name}</p>
-                  </td>
-                  <td className="p-3 border border-slate-200 font-mono text-xs">{client.cpf_cnpj}</td>
-                  <td className="p-3 border border-slate-200 text-xs">
-                    {typeof client.address === 'string' ? client.address : 'Ver detalhes'}
-                  </td>
+          {/* Título do relatório */}
+          <div style={{ padding: '8mm 15mm 6mm 15mm' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6mm' }}>
+              <h2 style={{ fontSize: '14pt', fontWeight: 900, color: '#0f172a', textTransform: 'uppercase', letterSpacing: '-0.02em' }}>Relatório Geral de Proprietários</h2>
+              <span style={{ backgroundColor: '#dcfce7', color: '#16a34a', fontSize: '7pt', fontWeight: 800, padding: '2px 8px', borderRadius: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{clients.length} registros</span>
+            </div>
+
+            <table className="w-full text-left" style={{ borderCollapse: 'collapse', tableLayout: 'auto' }}>
+              <thead>
+                <tr style={{ backgroundColor: '#0f172a' }}>
+                  <th style={{ padding: '10px 12px', fontSize: '8pt', fontWeight: 800, textTransform: 'uppercase', color: '#ffffff', letterSpacing: '0.05em', border: '1px solid #e2e8f0' }}>Nome</th>
+                  <th style={{ padding: '10px 12px', fontSize: '8pt', fontWeight: 800, textTransform: 'uppercase', color: '#ffffff', letterSpacing: '0.05em', border: '1px solid #e2e8f0' }}>CPF/CNPJ</th>
+                  <th style={{ padding: '10px 12px', fontSize: '8pt', fontWeight: 800, textTransform: 'uppercase', color: '#ffffff', letterSpacing: '0.05em', border: '1px solid #e2e8f0' }}>Endereço</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {clients.map((client, idx) => (
+                  <tr key={client.id} style={{ backgroundColor: idx % 2 === 0 ? '#ffffff' : '#f8fafc' }}>
+                    <td style={{ padding: '9px 12px', border: '1px solid #e2e8f0', fontSize: '9pt', fontWeight: 700, color: '#0f172a' }}>{client.name}</td>
+                    <td style={{ padding: '9px 12px', border: '1px solid #e2e8f0', fontSize: '8.5pt', fontFamily: 'monospace', color: '#475569' }}>{client.cpf_cnpj}</td>
+                    <td style={{ padding: '9px 12px', border: '1px solid #e2e8f0', fontSize: '8.5pt', color: '#475569' }}>
+                      {typeof client.address === 'string' ? client.address : 'Ver detalhes'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+
+            {/* Rodapé */}
+            <div style={{ marginTop: '8mm', display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '4mm', borderTop: '1px solid #e2e8f0' }}>
+              <p style={{ fontSize: '7pt', color: '#94a3b8', fontWeight: 600 }}>Gerado automaticamente em {new Date().toLocaleDateString('pt-BR')}</p>
+              <p style={{ fontSize: '7pt', color: '#16a34a', fontWeight: 800 }}>Metrica Agro — GeoFlow</p>
+            </div>
+          </div>
         </div>
       </div>
 

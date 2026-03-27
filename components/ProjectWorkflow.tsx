@@ -117,6 +117,19 @@ const CHECKLIST_CAR_GO = [
   { id: '4', label: 'e-mail' }
 ];
 
+const CHECKLIST_GENERIC = [
+  { id: '1', label: 'REQUERIMENTO solicitando a AVERBAÇÃO da CERTIFICAÇÃO.' },
+  { id: '2', label: 'CERTIFICAÇÃO emitida pelo INCRA/SIGEF.' },
+  { id: '3', label: 'ANUÊNCIA / DECLARAÇÃO de limites de todos os confrontantes.' },
+  { id: '4', label: 'MAPA expedido pelo SIGEF.' },
+  { id: '5', label: 'PROVA DE ART quitada.' },
+  { id: '6', label: 'LAUDO TÉCNICO do engenheiro responsável.' },
+  { id: '7', label: 'CCIR atualizado.' },
+  { id: '8', label: 'ITR – últimos 05 anos.' },
+  { id: '9', label: 'Procuração (se aplicável).' },
+  { id: '10', label: 'CAR (Cadastro Ambiental Rural).' },
+];
+
 const ProjectWorkflow: React.FC<ProjectWorkflowProps> = ({
   project,
   client,
@@ -186,7 +199,7 @@ const ProjectWorkflow: React.FC<ProjectWorkflowProps> = ({
 
   const isCarGo = service?.name?.toUpperCase().includes('CAR');
 
-  const activeChecklist = isCarGo ? CHECKLIST_CAR_GO : (isRioVerde ? CHECKLIST_RIO_VERDE : (isRioVerde2 ? CHECKLIST_RIO_VERDE_2 : (isMontividiu ? CHECKLIST_MONTIVIDIU : [])));
+  const activeChecklist = isCarGo ? CHECKLIST_CAR_GO : (isRioVerde ? CHECKLIST_RIO_VERDE : (isRioVerde2 ? CHECKLIST_RIO_VERDE_2 : (isMontividiu ? CHECKLIST_MONTIVIDIU : CHECKLIST_GENERIC)));
   const hasChecklist = isDocumentationStep && activeChecklist.length > 0;
 
   useEffect(() => {
@@ -671,14 +684,12 @@ const ProjectWorkflow: React.FC<ProjectWorkflowProps> = ({
                         <p className="text-sm font-medium text-slate-main mt-1">Órgão Regulador: <strong className="font-semibold">{registry?.name || (isRioVerde || isRioVerde2 ? 'Rio Verde' : 'Local')}</strong></p>
                       </div>
                     </div>
-                    {(isRioVerde || isRioVerde2) && (
-                      <button
-                        onClick={() => setShowCoverPreview(true)}
-                        className="flex items-center justify-center gap-3 px-6 py-3 bg-slate-main text-white rounded-2xl text-[10px] font-semibold uppercase tracking-[0.2em] hover:bg-slate-800 transition-all shadow-premium w-full sm:w-auto active:scale-95"
-                      >
-                        <FileDown size={18} /> Gerar Checklist
-                      </button>
-                    )}
+                    <button
+                      onClick={() => setShowCoverPreview(true)}
+                      className="flex items-center justify-center gap-3 px-6 py-3 bg-slate-main text-white rounded-2xl text-[10px] font-semibold uppercase tracking-[0.2em] hover:bg-slate-800 transition-all shadow-premium w-full sm:w-auto active:scale-95"
+                    >
+                      <FileDown size={18} /> Gerar Checklist
+                    </button>
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {activeChecklist.map(item => (
@@ -1171,6 +1182,9 @@ const ProjectWorkflow: React.FC<ProjectWorkflowProps> = ({
             if (budgetStep) {
               onUpdateStep(budgetStep.id!, budgetStep.status, JSON.stringify(items));
             }
+          }}
+          onUpdateStepNotes={(newNotes) => {
+            onUpdateStep(selectedStep.id!, selectedStep.status, newNotes);
           }}
           onReceiptReceived={selectedStep?.step_id === WorkflowStepId.RECEIPT ? onCreateTransaction : undefined}
           onApprove={(num) => {
