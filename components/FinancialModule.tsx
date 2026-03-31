@@ -285,7 +285,7 @@ const FinancialModule: React.FC<FinancialModuleProps> = ({
       const matchesProject = projectFilter === 'ALL' || t.project_id === projectFilter;
       const matchesScope = scopeFilter === 'ALL' || (t.scope || 'Empresa') === scopeFilter;
       return matchesSearch && matchesType && matchesStatus && matchesProject && matchesScope;
-    });
+    }).sort((a, b) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime());
   }, [transactions, searchTerm, typeFilter, statusFilter, projectFilter, scopeFilter]);
 
   const dreData = useMemo(() => {
@@ -356,6 +356,27 @@ const FinancialModule: React.FC<FinancialModuleProps> = ({
 
     return { structure, details };
   }, [transactions, dreYear, dreScope]);
+
+  const reminders = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const fifteenDaysFromNow = new Date(today);
+    fifteenDaysFromNow.setDate(today.getDate() + 15);
+
+    const overdue = transactions.filter(t =>
+      t.status === TransactionStatus.PENDING &&
+      new Date(t.due_date) < today
+    ).sort((a, b) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime());
+
+    const dueSoon = transactions.filter(t =>
+      t.status === TransactionStatus.PENDING &&
+      new Date(t.due_date) >= today &&
+      new Date(t.due_date) <= fifteenDaysFromNow
+    ).sort((a, b) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime());
+
+    return { overdue, dueSoon, hasReminders: overdue.length > 0 || dueSoon.length > 0 };
+  }, [transactions]);
 
   const handleEditTransaction = (transaction: FinancialTransaction) => {
     setEditingTransaction(transaction);
@@ -645,6 +666,89 @@ const FinancialModule: React.FC<FinancialModuleProps> = ({
               <StatCard label="A Pagar" value={stats.payable} icon={<TrendingDown className="text-rose-600" />} sub="Contas pendentes" />
               <StatCard label="Saldo Projetado" value={stats.projected} icon={<TrendingUp className="text-violet-600" />} sub="Projeção fluxo futuro" />
             </div>
+
+            {/* Lembretes Financeiros */}
+            {reminders.hasReminders && (
+              <div className="bg-white p-6 rounded-2xl border border-rose-200/50 shadow-sm space-y-4 animate-in fade-in slide-in-from-top-4 duration-500">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wider flex items-center gap-2">
+                    <AlertCircle size={18} className="text-rose-500" /> Pendências Financeiras Urgentes
+                  </h3>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-100 px-2 py-1 rounded-lg">
+                    {reminders.overdue.length + reminders.dueSoon.length} itens
+                  </span>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Vencidos */}
+                  {reminders.overdue.length > 0 && (
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-2 px-1">
+                        <div className="w-1.5 h-1.5 bg-rose-500 rounded-full animate-pulse"></div>
+                        <p className="text-[10px] font-black text-rose-500 uppercase tracking-widest">Vencidos</p>
+                      </div>
+                      <div className="space-y-2 overflow-y-auto max-h-[250px] custom-scrollbar pr-1">
+                        {reminders.overdue.map(t => (
+                          <div key={t.id} className="flex items-center justify-between bg-rose-50/50 p-3 rounded-xl border border-rose-100 group hover:bg-rose-50 hover:shadow-sm transition-all">
+                            <div className="flex items-center gap-3 overflow-hidden">
+                              <div className="w-8 h-8 rounded-lg bg-white flex items-center justify-center text-rose-500 shadow-sm shrink-0 group-hover:scale-110 transition-transform">
+                                <AlertCircle size={14} />
+                              </div>
+                              <div className="min-w-0">
+                                <p className="text-xs font-bold text-slate-800 truncate">{t.description}</p>
+                                <p className="text-[10px] text-rose-600 font-medium">Venceu em {formatDate(t.due_date)}</p>
+                              </div>
+                            </div>
+                            <div className="text-right shrink-0 ml-4">
+                              <p className="text-xs font-black text-rose-700">{formatCurrency(t.amount)}</p>
+                              <button 
+                                onClick={() => handleEditTransaction(t)}
+                                className="mt-1 flex items-center gap-1 text-[9px] font-black text-primary uppercase tracking-tighter hover:text-primary-dark transition-colors"
+                              >
+                                Pagar <ArrowUpRight size={10} />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* A Vencer */}
+                  {reminders.dueSoon.length > 0 && (
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-2 px-1">
+                        <div className="w-1.5 h-1.5 bg-amber-500 rounded-full"></div>
+                        <p className="text-[10px] font-black text-amber-500 uppercase tracking-widest">A Vencer (15 dias)</p>
+                      </div>
+                      <div className="space-y-2 overflow-y-auto max-h-[250px] custom-scrollbar pr-1">
+                        {reminders.dueSoon.map(t => (
+                          <div key={t.id} className="flex items-center justify-between bg-amber-50/50 p-3 rounded-xl border border-amber-100 group hover:bg-amber-50 hover:shadow-sm transition-all">
+                            <div className="flex items-center gap-3 overflow-hidden">
+                              <div className="w-8 h-8 rounded-lg bg-white flex items-center justify-center text-amber-500 shadow-sm shrink-0 group-hover:scale-110 transition-transform">
+                                <Clock size={14} />
+                              </div>
+                              <div className="min-w-0">
+                                <p className="text-xs font-bold text-slate-800 truncate">{t.description}</p>
+                                <p className="text-[10px] text-amber-600 font-medium">Vence em {formatDate(t.due_date)}</p>
+                              </div>
+                            </div>
+                            <div className="text-right shrink-0 ml-4">
+                              <p className="text-xs font-black text-amber-700">{formatCurrency(t.amount)}</p>
+                              <button 
+                                onClick={() => handleEditTransaction(t)}
+                                className="mt-1 flex items-center gap-1 text-[9px] font-black text-primary uppercase tracking-tighter hover:text-primary-dark transition-colors"
+                              >
+                                Pagar <ArrowUpRight size={10} />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
 
             <div className="bg-white p-6 rounded-2xl border border-slate-200/40 shadow-sm">
               <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wider flex items-center gap-2 mb-4">

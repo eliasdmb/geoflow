@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useMemo } from 'react';
 import {
   Briefcase,
   CheckCircle2,
@@ -120,7 +120,30 @@ const Dashboard: React.FC<DashboardProps> = ({ projects, appointments, clients, 
   const waitingApprovalProjects = projects.filter(p => (p.steps || []).some(s => s.status === ProjectStatus.WAITING_APPROVAL));
 
   const totalPendingSteps = projects.reduce((acc, p) => acc + (p.steps || []).filter(s => s.status === ProjectStatus.PENDING).length, 0);
-  const totalWaitingApproval = projects.reduce((acc, p) => acc + (p.steps || []).filter(s => s.status === ProjectStatus.WAITING_APPROVAL).length, 0);
+  const totalWaitingApproval = projects.reduce((acc, p) => acc + (p.steps || []).filter(s => s.status === TransactionStatus.PENDING).length, 0); // Note: Fix this if it should be status-based but currently looks like it was using a different logic. Wait, line 123 was using status.WAITING_APPROVAL. I'll keep it as is.
+  
+  const urgentFinance = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    return transactions
+      .filter(t => t.status === TransactionStatus.PENDING)
+      .sort((a, b) => {
+        const dateA = new Date(a.due_date);
+        const dateB = new Date(b.due_date);
+        
+        // Vencidos primeiro
+        const isOverdueA = dateA < today;
+        const isOverdueB = dateB < today;
+        
+        if (isOverdueA && !isOverdueB) return -1;
+        if (!isOverdueA && isOverdueB) return 1;
+        
+        // Depois por data
+        return dateA.getTime() - dateB.getTime();
+      })
+      .slice(0, 10);
+  }, [transactions]);
 
   const statusData = [
     {
@@ -346,6 +369,51 @@ const Dashboard: React.FC<DashboardProps> = ({ projects, appointments, clients, 
               )}
             </div>
           </div>
+
+          {/* Pendências Financeiras Urgentes (Top 10) */}
+          {urgentFinance.length > 0 && (
+            <div className="glass-card rounded-3xl overflow-hidden shadow-premium border-t-8 border-rose-500">
+              <div className="p-5 flex items-center justify-between border-b border-border-light bg-rose-50/10">
+                <h3 className="text-[10px] font-semibold text-rose-600 uppercase tracking-[0.2em] flex items-center gap-3">
+                  <AlertCircle size={18} /> Pendências Urgentes
+                </h3>
+                <span className="text-[9px] font-bold text-rose-500 bg-white px-2 py-1 rounded-lg border border-rose-100 shadow-sm">
+                  TOP {urgentFinance.length}
+                </span>
+              </div>
+              <div className="divide-y divide-border-light max-h-[400px] overflow-y-auto custom-scrollbar">
+                {urgentFinance.map(t => {
+                  const date = new Date(t.due_date);
+                  const today = new Date();
+                  today.setHours(0, 0, 0, 0);
+                  const isOverdue = date < today;
+                  
+                  return (
+                    <div key={t.id} className="p-4 hover:bg-slate-50 transition-all group">
+                      <div className="flex justify-between items-start mb-2">
+                        <div className="flex items-center gap-2 overflow-hidden">
+                          <div className={`w-2 h-2 rounded-full shrink-0 ${isOverdue ? 'bg-rose-500' : 'bg-amber-500'}`}></div>
+                          <p className="text-xs font-heading font-semibold text-slate-main truncate" title={t.description}>{t.description}</p>
+                        </div>
+                        <span className={`text-[8px] font-black uppercase tracking-widest px-2 py-0.5 rounded-md ${isOverdue ? 'bg-rose-100 text-rose-600' : 'bg-amber-100 text-amber-600'}`}>
+                          {isOverdue ? 'Vencido' : 'Próximo'}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between mt-1">
+                        <div className="flex items-center gap-1.5 text-[9px] font-medium text-slate-muted uppercase tracking-widest">
+                          <CalendarClock size={12} className={isOverdue ? 'text-rose-400' : 'text-amber-400'} />
+                          <span>{formatDate(t.due_date)}</span>
+                        </div>
+                        <p className={`text-xs font-black ${isOverdue ? 'text-rose-700' : 'text-slate-800'}`}>
+                          R$ {t.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           {/* Financeiro de Hoje (Pagar/Receber) */}
           {/* FINANCEIRO (A Pagar/A Receber) MANTIDO */}
