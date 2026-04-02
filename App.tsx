@@ -376,94 +376,134 @@ const App: React.FC = () => {
     const uid = userIdRef.current;
     if (!uid) { showNotification("Sessão expirada. Faça login novamente.", "error"); endProgress(); return; }
 
+    const isArray = Array.isArray(data);
+
     // RBAC check for financial changes
-    if ((table === 'financial_transactions' || table === 'credit_cards' || table === 'credit_card_expenses') && role !== 'admin' && id) {
+    if (!isArray && (table === 'financial_transactions' || table === 'credit_cards' || table === 'credit_card_expenses') && role !== 'admin' && id) {
       showNotification("Apenas administradores podem alterar dados financeiros existentes.", "error");
+      endProgress();
       return;
     }
 
     try {
-      const { steps, created_at, updated_at, id: dataId, ...rawData } = data;
+      const sanitizeItem = (item: any) => {
+        const { steps, created_at, updated_at, id: dataId, ...rawData } = item;
+        // Convert empty strings to null for UUID fields (ending with _id)
+        const sanitizedData = { ...rawData };
+        Object.keys(sanitizedData).forEach(key => {
+          if (key.endsWith('_id') && sanitizedData[key] === '') {
+            sanitizedData[key] = null;
+          }
+        });
 
-      // Convert empty strings to null for UUID fields (ending with _id)
-      const sanitizedData = { ...rawData };
-      Object.keys(sanitizedData).forEach(key => {
-        if (key.endsWith('_id') && sanitizedData[key] === '') {
-          sanitizedData[key] = null;
+        let cleanData = sanitizedData;
+        if (table === 'accounts') {
+          cleanData = {
+            ...rawData,
+            initial_balance: parseFloat(rawData.initial_balance)
+          };
         }
-      });
+        return { ...cleanData, user_id: uid };
+      };
 
-      let cleanData = sanitizedData;
+      if (isArray) {
+        console.log(`App: Iniciando salvamento de ${data.length} registros em série...`);
+        const payload = data.map(sanitizeItem);
+        
+        // Executa as inserções em paralelo, mas rastreia cada uma
+        const results = await Promise.all(payload.map(async (item, index) => {
+          try {
+            const { error } = await supabase.from(table).insert(item);
+            if (error) {
+              console.error(`App: Erro no item ${index + 1}:`, error);
+              return { success: false, error };
+            }
+            return { success: true };
+          } catch (e) {
+            console.error(`App: Exceção no item ${index + 1}:`, e);
+            return { success: false, error: e };
+          }
+        }));
 
-      if (table === 'accounts') {
-        cleanData = {
-          ...rawData,
-          initial_balance: parseFloat(rawData.initial_balance)
-        };
-      }
-
-      // Special handling for TRANSFER type financial transactions
-      if (table === 'financial_transactions' && rawData.type === TransactionType.TRANSFER) {
-        if (id) {
-          showNotification("Atualização de transferências não suportada diretamente. Exclua e recrie.", "error");
-          endProgress();
-          return;
-        }
-
-        const { from_account_id, to_account_id, amount, description, due_date, status, ...restOfData } = rawData;
-
-        // Create the expense transaction (debit from from_account_id)
-        const expensePayload = {
-          ...restOfData,
-          user_id: uid,
-          type: TransactionType.EXPENSE,
-          amount: parseFloat(String(amount)),
-          description: `Transferência enviada para ${to_account_id}: ${description}`,
-          account: from_account_id,
-          due_date: due_date,
-          status: status,
-          category: 'Transferência Enviada'
-        };
-        const { error: expenseError } = await supabase.from('financial_transactions').insert(expensePayload);
-        if (expenseError) throw expenseError;
-
-        // Create the income transaction (credit to to_account_id)
-        const incomePayload = {
-          ...restOfData,
-          user_id: uid,
-          type: TransactionType.INCOME,
-          amount: parseFloat(String(amount)),
-          description: `Transferência recebida de ${from_account_id}: ${description}`,
-          account: to_account_id,
-          due_date: due_date,
-          status: status,
-          category: 'Transferência Recebida'
-        };
-        const { error: incomeError } = await supabase.from('financial_transactions').insert(incomePayload);
-        if (incomeError) throw incomeError;
-
-        showNotification("Transferência realizada com sucesso!", "success");
-        await fetchInitialData(uid);
-        endProgress();
-        return;
-      }
-
-      const payload = { ...cleanData, user_id: uid };
-      if (id) {
-        // Audit log for financial changes
-        if (table === 'financial_transactions' || table === 'credit_cards' || table === 'credit_card_expenses') {
-          logAudit('Alteração Financeira', table, id, null, payload);
+        const failures = results.filter(r => !r.success);
+        if (failures.length > 0) {
+          const firstError = (failures[0] as any).error;
+          throw firstError;
         }
 
-        const { error } = await supabase.from(table).update(payload).eq('id', id).eq('user_id', uid);
-        if (error) throw error;
+        showNotification(`${data.length} registros salvos com sucesso!`, 'success');
       } else {
-        const { error } = await supabase.from(table).insert(payload);
-        if (error) throw error;
+        // Special handling for TRANSFER type financial transactions
+        if (table === 'financial_transactions' && data.type === TransactionType.TRANSFER) {
+          if (id) {
+            showNotification("Atualização de transferências não suportada diretamente. Exclua e recrie.", "error");
+            endProgress();
+            return;
+          }
+
+          const { from_account_id, to_account_id, amount, description, due_date, status, ...restOfData } = data;
+
+          // Create the expense transaction (debit from from_account_id)
+          const expensePayload = {
+            ...restOfData,
+            user_id: uid,
+            type: TransactionType.EXPENSE,
+            amount: parseFloat(String(amount)),
+            description: `Transferência enviada para ${to_account_id}: ${description}`,
+            account: from_account_id,
+            due_date: due_date,
+            status: status,
+            category: 'Transferência Enviada'
+          };
+          const { error: expenseError } = await supabase.from('financial_transactions').insert(expensePayload);
+          if (expenseError) throw expenseError;
+
+          // Create the income transaction (credit to to_account_id)
+          const incomePayload = {
+            ...restOfData,
+            user_id: uid,
+            type: TransactionType.INCOME,
+            amount: parseFloat(String(amount)),
+            description: `Transferência recebida de ${from_account_id}: ${description}`,
+            account: to_account_id,
+            due_date: due_date,
+            status: status,
+            category: 'Transferência Recebida'
+          };
+          const { error: incomeError } = await supabase.from('financial_transactions').insert(incomePayload);
+          if (incomeError) throw incomeError;
+
+          showNotification("Transferência realizada com sucesso!", "success");
+        } else {
+          const payload = sanitizeItem(data);
+          if (id) {
+            // Audit log for financial changes
+            if (table === 'financial_transactions' || table === 'credit_cards' || table === 'credit_card_expenses') {
+              logAudit('Alteração Financeira', table, id, null, payload);
+            }
+
+            const { error } = await supabase.from(table).update(payload).eq('id', id).eq('user_id', uid);
+            if (error) throw error;
+          } else {
+            const { error } = await supabase.from(table).insert(payload);
+            if (error) throw error;
+          }
+          showNotification("Dados salvos com sucesso!");
+        }
       }
-      showNotification("Dados salvos com sucesso!");
-      fetchInitialData(uid);
+      
+      await fetchInitialData(uid);
     } catch (err: any) {
+      console.error("App: handleUpsert error detail:", {
+        table,
+        id,
+        error: err,
+        code: err?.code,
+        details: err?.details,
+        hint: err?.hint,
+        message: err?.message
+      });
+      
       if (err?.code === '42703') {
         showNotification("Erro de Banco: Novos campos detectados. Por favor, execute o SQL no painel Supabase para habilitar novos campos (Data da Certificação, ART, etc.).", "alert");
       } else {
@@ -604,14 +644,20 @@ const App: React.FC = () => {
           stepsToCreate = CAR_WORKFLOW_STEPS_DEFINITION;
         }
 
-        const steps = stepsToCreate.map((s, i) => ({
-          project_id: data.id,
-          step_id: s.id,
-          label: s.label,
-          has_document: s.hasDocument,
-          status: i === 0 ? ProjectStatus.IN_PROGRESS : ProjectStatus.NOT_STARTED,
-          user_id: uid
-        }));
+        const steps = stepsToCreate.map((s, i) => {
+          let label = s.label;
+          if (s.id === WorkflowStepId.DOCUMENTATION && selectedService?.name) {
+            label = `${s.label} - ${selectedService.name}`;
+          }
+          return {
+            project_id: data.id,
+            step_id: s.id,
+            label: label,
+            has_document: s.hasDocument,
+            status: i === 0 ? ProjectStatus.IN_PROGRESS : ProjectStatus.NOT_STARTED,
+            user_id: uid
+          };
+        });
 
         await supabase.from('project_steps').insert(steps);
         fetchInitialData(uid);

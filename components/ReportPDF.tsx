@@ -202,22 +202,30 @@ interface ReportPDFProps {
   endDate?: string;
   reportType?: 'ALL' | TransactionType;
   reportCategory?: string;
+  previousBalance?: number;
+  includePreviousBalance?: boolean;
 }
 
 const formatCurrency = (value: number) => {
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 };
 
-const ReportPDF: React.FC<ReportPDFProps> = ({ reportData, startDate, endDate, reportType, reportCategory }) => {
+const ReportPDF: React.FC<ReportPDFProps> = ({
+  reportData, startDate, endDate, reportType, reportCategory,
+  previousBalance = 0, includePreviousBalance = false
+}) => {
   const totalIncome = reportData
     .filter(t => t.type === TransactionType.INCOME)
-    .reduce((sum, t) => sum + t.amount, 0);
+    .reduce((sum, t) => sum + (parseFloat(String(t.amount)) || 0), 0);
   const totalExpense = reportData
     .filter(t => t.type === TransactionType.EXPENSE)
-    .reduce((sum, t) => sum + t.amount, 0);
+    .reduce((sum, t) => sum + (parseFloat(String(t.amount)) || 0), 0);
   const balance = totalIncome - totalExpense;
+  const finalBalance = includePreviousBalance ? previousBalance + balance : balance;
 
-  const periodo = `${startDate ? new Date(startDate).toLocaleDateString('pt-BR') : 'Início'} — ${endDate ? new Date(endDate).toLocaleDateString('pt-BR') : 'Fim'}`;
+  const periodo = startDate || endDate
+    ? `${startDate ? new Date(startDate).toLocaleDateString('pt-BR') : 'Início'} — ${endDate ? new Date(endDate).toLocaleDateString('pt-BR') : 'Fim'}`
+    : `Gerado em ${new Date().toLocaleDateString('pt-BR')}`;
 
   return (
     <Document>
@@ -269,16 +277,24 @@ const ReportPDF: React.FC<ReportPDFProps> = ({ reportData, startDate, endDate, r
         {/* Resumo */}
         <View style={styles.summarySection}>
           <View style={[styles.summaryCard, { backgroundColor: '#dcfce7' }]}>
-            <Text style={[styles.summaryLabel, { color: '#16a34a' }]}>Receitas</Text>
+            <Text style={[styles.summaryLabel, { color: '#16a34a' }]}>Entradas</Text>
             <Text style={[styles.summaryValue, { color: '#16a34a' }]}>{formatCurrency(totalIncome)}</Text>
           </View>
           <View style={[styles.summaryCard, { backgroundColor: '#fee2e2' }]}>
-            <Text style={[styles.summaryLabel, { color: '#dc2626' }]}>Despesas</Text>
+            <Text style={[styles.summaryLabel, { color: '#dc2626' }]}>Saídas</Text>
             <Text style={[styles.summaryValue, { color: '#dc2626' }]}>{formatCurrency(totalExpense)}</Text>
           </View>
-          <View style={[styles.summaryCard, { backgroundColor: balance >= 0 ? '#dbeafe' : '#fee2e2' }]}>
-            <Text style={[styles.summaryLabel, { color: balance >= 0 ? '#1d4ed8' : '#dc2626' }]}>Saldo</Text>
-            <Text style={[styles.summaryValue, { color: balance >= 0 ? '#1d4ed8' : '#dc2626' }]}>{formatCurrency(balance)}</Text>
+          {includePreviousBalance && (
+            <View style={[styles.summaryCard, { backgroundColor: '#f1f5f9' }]}>
+              <Text style={[styles.summaryLabel, { color: '#64748b' }]}>Saldo Anterior</Text>
+              <Text style={[styles.summaryValue, { color: '#334155' }]}>{formatCurrency(previousBalance)}</Text>
+            </View>
+          )}
+          <View style={[styles.summaryCard, { backgroundColor: finalBalance >= 0 ? '#dbeafe' : '#fee2e2' }]}>
+            <Text style={[styles.summaryLabel, { color: finalBalance >= 0 ? '#1d4ed8' : '#dc2626' }]}>
+              {includePreviousBalance ? 'Saldo Final' : 'Saldo do Período'}
+            </Text>
+            <Text style={[styles.summaryValue, { color: finalBalance >= 0 ? '#1d4ed8' : '#dc2626' }]}>{formatCurrency(finalBalance)}</Text>
           </View>
         </View>
 

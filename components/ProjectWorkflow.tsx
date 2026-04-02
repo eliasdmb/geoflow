@@ -1074,6 +1074,7 @@ const ProjectWorkflow: React.FC<ProjectWorkflowProps> = ({
                     setIsAddingExpense(false);
                   }
                 }}
+                disabled={isAddingExpense}
                 className={`h-10 px-5 ${newExpense.type === TransactionType.INCOME ? 'bg-emerald-500 hover:bg-emerald-600 shadow-emerald-200' : 'bg-primary hover:bg-primary-dark shadow-primary/20'} text-white rounded-xl text-[10px] font-bold uppercase tracking-widest shadow-md transition-all active:scale-95 disabled:opacity-40 flex items-center gap-2 shrink-0 whitespace-nowrap`}
               >
                 {isAddingExpense ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
@@ -1203,7 +1204,7 @@ const ProjectWorkflow: React.FC<ProjectWorkflowProps> = ({
       {showCoverPreview && (
         <DocumentPreview
           project={project}
-          step={{ ...selectedStep, label: 'Documentação (Checklist)', notes: JSON.stringify(checklistState) }} // Pass checklist as notes
+          step={{ ...selectedStep, label: selectedStep.label, notes: JSON.stringify(checklistState) }} // Pass checklist as notes
           client={client}
           property={property}
           professional={professional}

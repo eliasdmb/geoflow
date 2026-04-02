@@ -22,7 +22,8 @@ import {
   Calculator,
   CreditCard as CreditCardIcon,
   Layers,
-  Landmark
+  Landmark,
+  Loader2
 } from 'lucide-react';
 import {
   Project,
@@ -57,13 +58,13 @@ interface FinancialModuleProps {
   projects: Project[];
   creditCards: CreditCard[];
   creditCardExpenses: CreditCardExpense[];
-  onSaveTransaction: (transaction: Partial<FinancialTransaction>, id?: string) => void;
+  onSaveTransaction: (transaction: Partial<FinancialTransaction>, id?: string) => Promise<void>;
   onDeleteTransaction: (id: string) => void;
-  onSaveCreditCard: (card: Partial<CreditCard>, id?: string) => void;
+  onSaveCreditCard: (card: Partial<CreditCard>, id?: string) => Promise<void>;
   onDeleteCreditCard: (id: string) => void;
-  onSaveCreditCardExpense: (expense: Partial<CreditCardExpense>, id?: string) => void;
+  onSaveCreditCardExpense: (expense: Partial<CreditCardExpense>, id?: string) => Promise<void>;
   onDeleteCreditCardExpense: (id: string) => void;
-  onSaveAccount: (account: Partial<Account>, id?: string) => void;
+  onSaveAccount: (account: Partial<Account>, id?: string) => Promise<void>;
   onDeleteAccount: (id: string) => void;
   accounts: Account[];
 }
@@ -99,6 +100,8 @@ const FinancialModule: React.FC<FinancialModuleProps> = ({
   const [showAccountModal, setShowAccountModal] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<FinancialTransaction | null>(null);
   const [editingAccount, setEditingAccount] = useState<Account | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const [showInstallmentChoice, setShowInstallmentChoice] = useState(false);
   const [selectedCardId, setSelectedCardId] = useState<string | 'ALL'>('ALL');
 
   const [searchTerm, setSearchTerm] = useState('');
@@ -106,6 +109,14 @@ const FinancialModule: React.FC<FinancialModuleProps> = ({
   const [statusFilter, setStatusFilter] = useState<'ALL' | TransactionStatus>('ALL');
   const [projectFilter, setProjectFilter] = useState<string>('ALL');
   const [scopeFilter, setScopeFilter] = useState<'ALL' | 'Pessoal' | 'Empresa'>('ALL');
+  const [accountFilter, setAccountFilter] = useState<string>('ALL');
+  const [monthFilter, setMonthFilter] = useState<string>(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${(d.getMonth() + 1).toString().padStart(2, '0')}`;
+  });
+
+  const [includePreviousBalance, setIncludePreviousBalance] = useState(false);
+  const [previousBalance, setPreviousBalance] = useState('0');
 
   // Report states
   const [reportStartDate, setReportStartDate] = useState('');
@@ -284,9 +295,27 @@ const FinancialModule: React.FC<FinancialModuleProps> = ({
       const matchesStatus = statusFilter === 'ALL' || t.status === statusFilter;
       const matchesProject = projectFilter === 'ALL' || t.project_id === projectFilter;
       const matchesScope = scopeFilter === 'ALL' || (t.scope || 'Empresa') === scopeFilter;
-      return matchesSearch && matchesType && matchesStatus && matchesProject && matchesScope;
+      const matchesAccount = accountFilter === 'ALL' || t.account === accountFilter;
+      const matchesMonth = (() => {
+        if (!monthFilter) return true;
+        // Extrai ano-mês direto da string para evitar desvio de fuso horário
+        const ym = (t.due_date || '').slice(0, 7);
+        return ym === monthFilter;
+      })();
+      return matchesSearch && matchesType && matchesStatus && matchesProject && matchesScope && matchesAccount && matchesMonth;
     }).sort((a, b) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime());
-  }, [transactions, searchTerm, typeFilter, statusFilter, projectFilter, scopeFilter]);
+  }, [transactions, searchTerm, typeFilter, statusFilter, projectFilter, scopeFilter, accountFilter, monthFilter]);
+
+  const filteredStats = useMemo(() => {
+    const income = filteredTransactions
+      .filter(t => t.type === TransactionType.INCOME)
+      .reduce((s, t) => s + (parseFloat(String(t.amount)) || 0), 0);
+    const expense = filteredTransactions
+      .filter(t => t.type === TransactionType.EXPENSE)
+      .reduce((s, t) => s + (parseFloat(String(t.amount)) || 0), 0);
+    const prev = includePreviousBalance ? (parseFloat(previousBalance) || 0) : 0;
+    return { income, expense, net: income - expense, prev, final: prev + income - expense };
+  }, [filteredTransactions, includePreviousBalance, previousBalance]);
 
   const dreData = useMemo(() => {
     const categoriesFilter = {
@@ -407,16 +436,33 @@ const FinancialModule: React.FC<FinancialModuleProps> = ({
     }
   };
 
+  const isEditingSeries = !!(
+    editingTransaction &&
+    editingTransaction.parent_id &&
+    editingTransaction.total_occurrences &&
+    editingTransaction.total_occurrences > 1
+  );
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-
     const parsedAmount = parseFloat(formData.amount);
     if (isNaN(parsedAmount)) {
       alert('Por favor, insira um valor numérico válido para o campo "Valor".');
       return;
     }
+    // Se é edição de uma parcela de série, perguntar escopo da alteração
+    if (isEditingSeries) {
+      setShowInstallmentChoice(true);
+      return;
+    }
+    doSave('single');
+  };
 
-    // Common data for all transactions in a series
+  const doSave = async (mode: 'single' | 'all') => {
+    const parsedAmount = parseFloat(formData.amount);
+    setShowInstallmentChoice(false);
+    setIsSaving(true);
+
     const commonData = {
       description: formData.description,
       type: formData.type,
@@ -431,64 +477,89 @@ const FinancialModule: React.FC<FinancialModuleProps> = ({
       notes: formData.notes || undefined
     };
 
-    if (formData.repeat_type === 'none' || editingTransaction) {
-      // Single transaction
-      onSaveTransaction({
-        ...(editingTransaction && { id: editingTransaction.id }),
-        ...commonData,
-        amount: parsedAmount,
-        due_date: formData.due_date
-      }, editingTransaction?.id);
-    } else {
-      // Multiple transactions (Installments or Recurrence)
-      const count = parseInt(formData.installments_count) || 1;
-      const parentId = crypto.randomUUID();
-      const baseDate = new Date(formData.due_date);
-
-      for (let i = 0; i < count; i++) {
-        const dueDate = new Date(baseDate);
-        if (formData.repeat_type === 'installment' || formData.recurrence_period === 'monthly') {
-          dueDate.setMonth(baseDate.getMonth() + i);
-        } else if (formData.recurrence_period === 'weekly') {
-          dueDate.setDate(baseDate.getDate() + (i * 7));
+    try {
+      if (editingTransaction && mode === 'all') {
+        // Atualiza todas as parcelas da série (mantém a due_date individual de cada uma)
+        const siblings = transactions.filter(
+          (t: FinancialTransaction) => t.parent_id === editingTransaction.parent_id
+        );
+        await Promise.all(
+          siblings.map((sibling: FinancialTransaction) =>
+            onSaveTransaction(
+              { id: sibling.id, ...commonData, amount: parsedAmount, due_date: sibling.due_date },
+              sibling.id
+            )
+          )
+        );
+      } else if (editingTransaction) {
+        // Atualiza apenas esta parcela
+        await onSaveTransaction(
+          { id: editingTransaction.id, ...commonData, amount: parsedAmount, due_date: formData.due_date },
+          editingTransaction.id
+        );
+      } else {
+        // Novo lançamento — parcelas ou recorrência
+        const count = parseInt(formData.installments_count) || 1;
+        const generateUUID = () => {
+          if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID();
+          return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+            const r = Math.random() * 16 | 0;
+            const v = c === 'x' ? r : (r & 0x3 | 0x8);
+            return v.toString(16);
+          });
+        };
+        const parentId = generateUUID();
+        const baseDate = new Date(formData.due_date);
+        const transactionsToSave = [];
+        for (let i = 0; i < count; i++) {
+          const dueDate = new Date(baseDate);
+          if (formData.repeat_type === 'installment' || formData.recurrence_period === 'monthly') {
+            dueDate.setMonth(baseDate.getMonth() + i);
+          } else if (formData.recurrence_period === 'weekly') {
+            dueDate.setDate(baseDate.getDate() + (i * 7));
+          }
+          const amount = formData.repeat_type === 'installment'
+            ? Number((parsedAmount / count).toFixed(2))
+            : parsedAmount;
+          transactionsToSave.push({
+            ...commonData,
+            amount,
+            due_date: dueDate.toISOString().split('T')[0],
+            parent_id: parentId,
+            occurrence_number: i + 1,
+            total_occurrences: count,
+            is_recurring: formData.repeat_type === 'recurrence'
+          });
         }
-
-        const amount = formData.repeat_type === 'installment'
-          ? Number((parsedAmount / count).toFixed(2))
-          : parsedAmount;
-
-        onSaveTransaction({
-          ...commonData,
-          amount,
-          due_date: dueDate.toISOString().split('T')[0],
-          parent_id: parentId,
-          occurrence_number: i + 1,
-          total_occurrences: count,
-          is_recurring: formData.repeat_type === 'recurrence'
-        });
+        await onSaveTransaction(transactionsToSave as any);
       }
-    }
 
-    setShowModal(false);
-    setEditingTransaction(null);
-    setFormData({
-      description: '',
-      amount: '',
-      type: TransactionType.INCOME,
-      category: 'Serviços',
-      status: TransactionStatus.PENDING,
-      payment_method: 'PIX' as any,
-      due_date: new Date().toISOString().split('T')[0],
-      project_id: '',
-      account: '',
-      from_account_id: '',
-      to_account_id: '',
-      scope: 'Empresa',
-      notes: '',
-      repeat_type: 'none',
-      installments_count: '1',
-      recurrence_period: 'monthly'
-    });
+      setShowModal(false);
+      setEditingTransaction(null);
+      setFormData({
+        description: '',
+        amount: '',
+        type: TransactionType.INCOME,
+        category: 'Serviços',
+        status: TransactionStatus.PENDING,
+        payment_method: 'PIX' as any,
+        due_date: new Date().toISOString().split('T')[0],
+        project_id: '',
+        account: '',
+        from_account_id: '',
+        to_account_id: '',
+        scope: 'Empresa',
+        notes: '',
+        repeat_type: 'none',
+        installments_count: '1',
+        recurrence_period: 'monthly'
+      });
+    } catch (err: any) {
+      console.error('FinancialModule Error:', err);
+      alert(`Erro ao salvar: ${err?.message || String(err)}`);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleAccountFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -496,7 +567,7 @@ const FinancialModule: React.FC<FinancialModuleProps> = ({
     setNewAccountFormData(prev => ({ ...prev, [name]: value }));
   };
 
-  const handleSaveAccount = (e: React.FormEvent) => {
+  const handleSaveAccount = async (e: React.FormEvent) => {
     e.preventDefault();
     const parsedInitialBalance = parseFloat(newAccountFormData.initial_balance);
     if (isNaN(parsedInitialBalance)) {
@@ -504,19 +575,26 @@ const FinancialModule: React.FC<FinancialModuleProps> = ({
       return;
     }
 
-    onSaveAccount({
-      ...(editingAccount && { id: editingAccount.id }),
-      name: newAccountFormData.name,
-      type: newAccountFormData.type,
-      initial_balance: parsedInitialBalance
-    }, editingAccount?.id);
-    setShowAccountModal(false);
-    setEditingAccount(null);
-    setNewAccountFormData({
-      name: '',
-      type: AccountType.CHECKING,
-      initial_balance: ''
-    });
+    setIsSaving(true);
+    try {
+      await onSaveAccount({
+        ...(editingAccount && { id: editingAccount.id }),
+        name: newAccountFormData.name,
+        type: newAccountFormData.type,
+        initial_balance: parsedInitialBalance
+      }, editingAccount?.id);
+      setShowAccountModal(false);
+      setEditingAccount(null);
+      setNewAccountFormData({
+        name: '',
+        type: AccountType.CHECKING,
+        initial_balance: ''
+      });
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleEditAccount = (account: Account) => {
@@ -875,12 +953,111 @@ const FinancialModule: React.FC<FinancialModuleProps> = ({
             </div>
 
             <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
-              <div className="p-4 bg-slate-50 border-b border-slate-200 flex flex-wrap items-center justify-between gap-4">
-                <div className="relative flex-1 min-w-[300px]">
+              <div className="p-4 bg-slate-50 border-b border-slate-200 flex flex-wrap items-center gap-3">
+                <div className="relative flex-1 min-w-[200px]">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
                   <input type="text" placeholder="Buscar..." className="w-full pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-sm" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
                 </div>
+                <input
+                  type="month"
+                  value={monthFilter}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setMonthFilter(e.target.value)}
+                  className="py-2 px-3 bg-white border border-slate-200 rounded-xl text-sm text-slate-600"
+                />
+                <select value={typeFilter} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setTypeFilter(e.target.value as 'ALL' | TransactionType)} className="py-2 px-3 bg-white border border-slate-200 rounded-xl text-sm text-slate-600">
+                  <option value="ALL">Todos os tipos</option>
+                  <option value={TransactionType.INCOME}>Receita</option>
+                  <option value={TransactionType.EXPENSE}>Despesa</option>
+                  <option value={TransactionType.TRANSFER}>Transferência</option>
+                </select>
+                <select value={statusFilter} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setStatusFilter(e.target.value as 'ALL' | TransactionStatus)} className="py-2 px-3 bg-white border border-slate-200 rounded-xl text-sm text-slate-600">
+                  <option value="ALL">Todos os status</option>
+                  <option value={TransactionStatus.PENDING}>Pendente</option>
+                  <option value={TransactionStatus.PAID}>Pago</option>
+                </select>
+                <select value={scopeFilter} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setScopeFilter(e.target.value as 'ALL' | 'Pessoal' | 'Empresa')} className="py-2 px-3 bg-white border border-slate-200 rounded-xl text-sm text-slate-600">
+                  <option value="ALL">Empresa + Pessoal</option>
+                  <option value="Empresa">Empresa</option>
+                  <option value="Pessoal">Pessoal</option>
+                </select>
+                <select value={accountFilter} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setAccountFilter(e.target.value)} className="py-2 px-3 bg-white border border-slate-200 rounded-xl text-sm text-slate-600">
+                  <option value="ALL">Todas as contas</option>
+                  {accounts.map((a: Account) => (
+                    <option key={a.id} value={a.id}>{a.name}</option>
+                  ))}
+                </select>
+                <select value={projectFilter} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setProjectFilter(e.target.value)} className="py-2 px-3 bg-white border border-slate-200 rounded-xl text-sm text-slate-600">
+                  <option value="ALL">Todos os projetos</option>
+                  {projects.map((p: { id: string; title: string }) => (
+                    <option key={p.id} value={p.id}>{p.title}</option>
+                  ))}
+                </select>
               </div>
+
+              {/* Sumário dos itens filtrados */}
+              <div className="px-4 py-3 bg-white border-b border-slate-100 flex flex-wrap items-center gap-3">
+                <div className="flex flex-wrap gap-3 flex-1">
+                  <div className="flex flex-col items-center px-4 py-2 bg-emerald-50 rounded-xl border border-emerald-100 min-w-[110px]">
+                    <span className="text-[9px] font-black text-emerald-500 uppercase tracking-widest">Entradas</span>
+                    <span className="text-sm font-black text-emerald-700">{formatCurrency(filteredStats.income)}</span>
+                  </div>
+                  <div className="flex flex-col items-center px-4 py-2 bg-rose-50 rounded-xl border border-rose-100 min-w-[110px]">
+                    <span className="text-[9px] font-black text-rose-500 uppercase tracking-widest">Saídas</span>
+                    <span className="text-sm font-black text-rose-700">{formatCurrency(filteredStats.expense)}</span>
+                  </div>
+                  {includePreviousBalance && (
+                    <div className="flex flex-col items-center px-4 py-2 bg-slate-50 rounded-xl border border-slate-200 min-w-[110px]">
+                      <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Saldo Anterior</span>
+                      <span className="text-sm font-black text-slate-700">{formatCurrency(filteredStats.prev)}</span>
+                    </div>
+                  )}
+                  <div className={`flex flex-col items-center px-4 py-2 rounded-xl border min-w-[110px] ${filteredStats.final >= 0 ? 'bg-blue-50 border-blue-100' : 'bg-rose-50 border-rose-100'}`}>
+                    <span className={`text-[9px] font-black uppercase tracking-widest ${filteredStats.final >= 0 ? 'text-blue-500' : 'text-rose-500'}`}>
+                      {includePreviousBalance ? 'Saldo Final' : 'Saldo do Período'}
+                    </span>
+                    <span className={`text-sm font-black ${filteredStats.final >= 0 ? 'text-blue-700' : 'text-rose-700'}`}>{formatCurrency(filteredStats.final)}</span>
+                  </div>
+                </div>
+
+                {/* Saldo anterior toggle + input */}
+                <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2">
+                  <label className="flex items-center gap-2 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={includePreviousBalance}
+                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => setIncludePreviousBalance(e.target.checked)}
+                      className="w-4 h-4 accent-primary"
+                    />
+                    <span className="text-[10px] font-bold text-slate-600 uppercase tracking-widest whitespace-nowrap">Saldo anterior</span>
+                  </label>
+                  {includePreviousBalance && (
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={previousBalance}
+                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPreviousBalance(e.target.value)}
+                      className="w-28 py-1 px-2 bg-white border border-slate-200 rounded-lg text-sm text-slate-700"
+                      placeholder="0,00"
+                    />
+                  )}
+                </div>
+
+                {/* Exportar PDF */}
+                <PDFDownloadLink
+                  document={
+                    <ReportPDF
+                      reportData={filteredTransactions}
+                      previousBalance={filteredStats.prev}
+                      includePreviousBalance={includePreviousBalance}
+                    />
+                  }
+                  fileName={`lancamentos-${monthFilter || 'filtrados'}.pdf`}
+                  className="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-primary-dark shadow-md shadow-primary/10 transition-all whitespace-nowrap"
+                >
+                  {({ loading }: { loading: boolean }) => loading ? 'Gerando...' : <><FileText size={14} /> Exportar PDF</>}
+                </PDFDownloadLink>
+              </div>
+
               <div className="table-responsive">
                 <div className="inline-block min-w-full align-middle">
                   <table className="w-full text-left">
@@ -1171,6 +1348,52 @@ const FinancialModule: React.FC<FinancialModuleProps> = ({
       }
 
 
+      {/* Modal: escolha de escopo para edição de parcelas */}
+      {showInstallmentChoice && editingTransaction && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 flex flex-col gap-5">
+            <div className="flex flex-col gap-1">
+              <h3 className="text-base font-black text-slate-800">Editar lançamento parcelado</h3>
+              <p className="text-xs text-slate-500">
+                Este lançamento é a parcela{' '}
+                <span className="font-bold text-slate-700">
+                  {editingTransaction.occurrence_number}/{editingTransaction.total_occurrences}
+                </span>{' '}
+                de uma série. O que deseja alterar?
+              </p>
+            </div>
+            <div className="flex flex-col gap-2">
+              <button
+                onClick={() => doSave('single')}
+                disabled={isSaving}
+                className="w-full py-3 px-4 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl font-bold text-sm text-left transition-colors disabled:opacity-50"
+              >
+                <span className="block text-sm font-black">Apenas esta parcela</span>
+                <span className="block text-[10px] text-slate-500 font-normal mt-0.5">
+                  Altera somente a parcela {editingTransaction.occurrence_number}
+                </span>
+              </button>
+              <button
+                onClick={() => doSave('all')}
+                disabled={isSaving}
+                className="w-full py-3 px-4 bg-primary/10 hover:bg-primary/20 text-primary rounded-xl font-bold text-sm text-left transition-colors disabled:opacity-50"
+              >
+                <span className="block text-sm font-black">Todas as parcelas</span>
+                <span className="block text-[10px] text-primary/70 font-normal mt-0.5">
+                  Altera todas as {editingTransaction.total_occurrences} parcelas da série (mantém as datas originais)
+                </span>
+              </button>
+            </div>
+            <button
+              onClick={() => setShowInstallmentChoice(false)}
+              className="text-xs text-slate-400 hover:text-slate-600 font-bold uppercase tracking-widest self-center transition-colors"
+            >
+              Cancelar
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* MODALS */}
       {
         showModal && (
@@ -1387,7 +1610,18 @@ const FinancialModule: React.FC<FinancialModuleProps> = ({
                   </div>
                 )}
 
-                <button type="submit" className="w-full py-3 bg-primary text-white rounded-2xl font-black uppercase tracking-widest hover:bg-primary-dark shadow-lg shadow-primary/10">Confirmar</button>
+                <button 
+                  type="submit" 
+                  disabled={isSaving}
+                  className="w-full py-3 bg-primary text-white rounded-2xl font-black uppercase tracking-widest hover:bg-primary-dark shadow-lg shadow-primary/10 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                >
+                  {isSaving ? (
+                    <>
+                      <Loader2 size={18} className="animate-spin" />
+                      Processando...
+                    </>
+                  ) : 'Confirmar'}
+                </button>
               </form>
             </div>
           </div>
@@ -1411,7 +1645,18 @@ const FinancialModule: React.FC<FinancialModuleProps> = ({
                 <input placeholder="Dia Fechamento" className="w-full p-3 bg-slate-50 rounded-xl" type="number" value={cardFormData.closing_day} onChange={e => setCardFormData({ ...cardFormData, closing_day: e.target.value })} />
                 <input placeholder="Dia Vencimento" className="w-full p-3 bg-slate-50 rounded-xl" type="number" value={cardFormData.due_day} onChange={e => setCardFormData({ ...cardFormData, due_day: e.target.value })} />
               </div>
-              <button type="submit" className="w-full py-3 bg-primary text-white rounded-2xl font-black uppercase tracking-widest hover:bg-primary-dark shadow-lg shadow-primary/10">Salvar</button>
+              <button 
+                type="submit" 
+                disabled={isSaving}
+                className="w-full py-3 bg-primary text-white rounded-2xl font-black uppercase tracking-widest hover:bg-primary-dark shadow-lg shadow-primary/10 disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {isSaving ? (
+                  <>
+                    <Loader2 size={16} className="animate-spin" />
+                    Salvando...
+                  </>
+                ) : 'Salvar'}
+              </button>
             </form>
           </div>
         </div>
@@ -1482,7 +1727,18 @@ const FinancialModule: React.FC<FinancialModuleProps> = ({
               </div>
               <div className="flex gap-3 pt-4">
                 <button type="button" onClick={() => setShowExpenseModal(false)} className="flex-1 py-3 border border-slate-200 text-slate-600 rounded-2xl font-bold">Cancelar</button>
-                <button type="submit" className="flex-1 py-3 bg-primary text-white rounded-2xl font-black uppercase tracking-widest hover:bg-primary-dark shadow-lg shadow-primary/10">Lançar</button>
+                <button 
+                  type="submit" 
+                  disabled={isSaving}
+                  className="flex-1 py-3 bg-primary text-white rounded-2xl font-black uppercase tracking-widest hover:bg-primary-dark shadow-lg shadow-primary/10 disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  {isSaving ? (
+                    <>
+                      <Loader2 size={16} className="animate-spin" />
+                      Lançando...
+                    </>
+                  ) : 'Lançar'}
+                </button>
               </div>
             </form>
           </div>
@@ -1549,8 +1805,10 @@ const FinancialModule: React.FC<FinancialModuleProps> = ({
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                  disabled={isSaving}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 flex items-center justify-center gap-2"
                 >
+                  {isSaving && <Loader2 size={16} className="animate-spin" />}
                   Salvar Conta
                 </button>
               </div>

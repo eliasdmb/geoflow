@@ -635,9 +635,11 @@ Pede Deferimento.
 ${allOwners2.map(o => `${o.name.toUpperCase()}\nCPF/CNPJ: ${o.cpf_cnpj}\nRequerente`).join(';')}`;
       }
 
-      case 'Documentação (Checklist)':
+      case (targetStep.label.startsWith('Documentação (Checklist)') ? targetStep.label : 'Documentação (Checklist)'):
+        if (targetStep.step_id !== WorkflowStepId.DOCUMENTATION && !targetStep.label.startsWith('Documentação (Checklist)')) break;
+
         const checklistArt = selectedCertification?.art_number || project?.art_number || 'N/A';
-        return `DOCUMENTAÇÃO (CHECKLIST)\n\nCLIENTE: ${client.name.toUpperCase()}\nIMÓVEL: ${property.name.toUpperCase()}\nART: ${checklistArt}\n\nItens do Processo:\n${(() => {
+        return `${targetStep.label.toUpperCase()}\n\nCLIENTE: ${client.name.toUpperCase()}\nIMÓVEL: ${property.name.toUpperCase()}\nART: ${checklistArt}\n\nItens do Processo:\n${(() => {
           try {
             const checklistState = step.notes ? JSON.parse(step.notes) : {};
             const registry = allRegistries?.find(r => r.id === project?.registry_id);
@@ -1091,7 +1093,7 @@ ${allOwners2.map(o => `${o.name.toUpperCase()}\nCPF/CNPJ: ${o.cpf_cnpj}\nRequere
               )}
 
               {/* TÍTULO DO DOCUMENTO */}
-              {step.label !== 'RECIBO' && step.label !== 'Requerimento para o Cartório' && step.label !== 'Documentação (Checklist)' && (
+              {step.label !== 'RECIBO' && step.label !== 'Requerimento para o Cartório' && step.step_id !== WorkflowStepId.DOCUMENTATION && (
                 <div className="text-center mb-4">
                   <h2 className="text-lg font-bold uppercase border-y-2 border-slate-100 py-2 tracking-widest inline-block px-8">
                     {step.label}
@@ -1662,12 +1664,12 @@ ${allOwners2.map(o => `${o.name.toUpperCase()}\nCPF/CNPJ: ${o.cpf_cnpj}\nRequere
                   </div>
                 </div>
                 </>
-              ) : step.label === 'Documentação (Checklist)' ? (
+              ) : step.step_id === WorkflowStepId.DOCUMENTATION ? (
                 <div className="space-y-3 leading-tight text-slate-900 w-full" style={{ boxSizing: 'border-box' }}>
 
                   <div className="text-center mb-4">
                     <h2 className="text-xl font-black uppercase tracking-widest text-slate-900 border-b-2 border-primary inline-block px-6 py-1">
-                      DOCUMENTAÇÃO (CHECKLIST)
+                      {step.label.toUpperCase()}
                     </h2>
                   </div>
 
@@ -1758,7 +1760,7 @@ ${allOwners2.map(o => `${o.name.toUpperCase()}\nCPF/CNPJ: ${o.cpf_cnpj}\nRequere
                 step.label !== 'Requerimento para o Cartório' &&
                 step.label !== 'Laudo Técnico' &&
                 step.label !== 'Laudo de Georreferenciamento' &&
-                step.label !== 'Documentação (Checklist)' && (
+                step.step_id !== WorkflowStepId.DOCUMENTATION && (
                   <>
                     <div className="mt-12 text-right text-[10pt]">
                       <p>{getFullDate(customDate, selectedRegistry?.municipality || property.municipality || 'Montividiu')}</p>
