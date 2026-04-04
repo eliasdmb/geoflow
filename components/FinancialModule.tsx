@@ -104,6 +104,51 @@ const FinancialModule: React.FC<FinancialModuleProps> = ({
   const [showInstallmentChoice, setShowInstallmentChoice] = useState(false);
   const [selectedCardId, setSelectedCardId] = useState<string | 'ALL'>('ALL');
 
+  // Period selector for stats cards
+  type PeriodPreset = 'THIS_MONTH' | 'LAST_MONTH' | 'THIS_YEAR' | 'LAST_YEAR' | 'CUSTOM' | 'ALL';
+  const [periodPreset, setPeriodPreset] = useState<PeriodPreset>('THIS_MONTH');
+  const [periodCustomStart, setPeriodCustomStart] = useState<string>(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${(d.getMonth() + 1).toString().padStart(2, '0')}-01`;
+  });
+  const [periodCustomEnd, setPeriodCustomEnd] = useState<string>(() => {
+    const d = new Date();
+    const last = new Date(d.getFullYear(), d.getMonth() + 1, 0);
+    return last.toISOString().split('T')[0];
+  });
+
+  // Resolve the active date range from the period preset
+  const activePeriodRange = useMemo<{ start: string | null; end: string | null }>(() => {
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = now.getMonth(); // 0-indexed
+    if (periodPreset === 'THIS_MONTH') {
+      const start = `${y}-${(m + 1).toString().padStart(2, '0')}-01`;
+      const endDate = new Date(y, m + 1, 0);
+      return { start, end: endDate.toISOString().split('T')[0] };
+    }
+    if (periodPreset === 'LAST_MONTH') {
+      const lm = m === 0 ? 11 : m - 1;
+      const ly = m === 0 ? y - 1 : y;
+      const start = `${ly}-${(lm + 1).toString().padStart(2, '0')}-01`;
+      const endDate = new Date(ly, lm + 1, 0);
+      return { start, end: endDate.toISOString().split('T')[0] };
+    }
+    if (periodPreset === 'THIS_YEAR') {
+      return { start: `${y}-01-01`, end: `${y}-12-31` };
+    }
+    if (periodPreset === 'LAST_YEAR') {
+      return { start: `${y - 1}-01-01`, end: `${y - 1}-12-31` };
+    }
+    if (periodPreset === 'CUSTOM') {
+      return { start: periodCustomStart, end: periodCustomEnd };
+    }
+    return { start: null, end: null }; // ALL
+  }, [periodPreset, periodCustomStart, periodCustomEnd]);
+
+  // Account filter for stats cards (independent from list's accountFilter)
+  const [statsAccountFilter, setStatsAccountFilter] = useState<string>('ALL');
+
   const [searchTerm, setSearchTerm] = useState('');
   const [typeFilter, setTypeFilter] = useState<'ALL' | TransactionType>('ALL');
   const [statusFilter, setStatusFilter] = useState<'ALL' | TransactionStatus>('ALL');
@@ -222,15 +267,41 @@ const FinancialModule: React.FC<FinancialModuleProps> = ({
     });
   }, [creditCards, creditCardExpenses]);
 
-  // Cálculos de Resumo
+  // Cálculos de Resumo (com filtro de período e conta)
   const stats = useMemo(() => {
-    const scopeFiltered = transactions.filter(t => {
+    const { start, end } = activePeriodRange;
+
+    // Find selected account object for initial_balance lookup
+    const selectedAccount = statsAccountFilter !== 'ALL'
+      ? accounts.find(a => a.id === statsAccountFilter)
+      : null;
+    const accountInitial = selectedAccount ? (selectedAccount.initial_balance || 0) : 0;
+
+    const periodFiltered = transactions.filter(t => {
+      if (!start && !end) return true;
+      const ym = (t.due_date || '').slice(0, 10);
+      if (start && ym < start) return false;
+      if (end && ym > end) return false;
+      return true;
+    });
+
+    const accountFiltered = periodFiltered.filter(t => {
+      if (statsAccountFilter === 'ALL') return true;
+      // Match by account id or name (legacy support)
+      return (
+        t.account === statsAccountFilter ||
+        t.from_account_id === statsAccountFilter ||
+        t.to_account_id === statsAccountFilter
+      );
+    });
+
+    const scopeFiltered = accountFiltered.filter(t => {
       if (scopeFilter === 'ALL') return true;
       if (!t.scope) return scopeFilter === 'Empresa';
       return t.scope === scopeFilter;
     });
 
-    const balance = scopeFiltered
+    const balanceFromTransactions = scopeFiltered
       .filter(t => t.status === TransactionStatus.PAID)
       .reduce((acc, t) => {
         if (t.type === TransactionType.TRANSFER) return acc;
@@ -238,6 +309,11 @@ const FinancialModule: React.FC<FinancialModuleProps> = ({
         if (t.type === TransactionType.EXPENSE) return acc - (parseFloat(String(t.amount)) || 0);
         return acc;
       }, 0);
+
+    // When a specific account is selected and no period filter, include initial balance
+    const balance = selectedAccount && !start && !end
+      ? accountInitial + balanceFromTransactions
+      : balanceFromTransactions;
 
     const receivable = scopeFiltered
       .filter(t => t.type === TransactionType.INCOME && t.status === TransactionStatus.PENDING)
@@ -247,8 +323,8 @@ const FinancialModule: React.FC<FinancialModuleProps> = ({
       .filter(t => t.type === TransactionType.EXPENSE && t.status === TransactionStatus.PENDING)
       .reduce((acc, t) => acc + (parseFloat(String(t.amount)) || 0), 0);
 
-    return { balance, receivable, payable, projected: balance + receivable - payable };
-  }, [transactions, scopeFilter]);
+    return { balance, receivable, payable, projected: balance + receivable - payable, selectedAccount };
+  }, [transactions, scopeFilter, activePeriodRange, statsAccountFilter, accounts]);
 
   // Dados para Gráfico de Fluxo de Caixa
   const chartData = useMemo(() => {
@@ -738,6 +814,117 @@ const FinancialModule: React.FC<FinancialModuleProps> = ({
       {
         activeTab === 'FLUXO' && (
           <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+
+            {/* ── Period + Account Selector ── */}
+            <div className="bg-white rounded-2xl border border-slate-200/60 shadow-sm overflow-hidden">
+
+              {/* Row 1: Period */}
+              <div className="flex flex-wrap items-center gap-3 px-4 py-3 border-b border-slate-100">
+                <div className="flex items-center gap-2 shrink-0">
+                  <Calendar size={14} className="text-primary" />
+                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Período</span>
+                </div>
+
+                <div className="flex flex-wrap gap-1.5">
+                  {([
+                    { key: 'THIS_MONTH', label: 'Este mês' },
+                    { key: 'LAST_MONTH', label: 'Mês anterior' },
+                    { key: 'THIS_YEAR',  label: 'Este ano' },
+                    { key: 'LAST_YEAR',  label: 'Ano anterior' },
+                    { key: 'CUSTOM',     label: 'Personalizado' },
+                    { key: 'ALL',        label: 'Todos' },
+                  ] as const).map(({ key, label }) => (
+                    <button
+                      key={key}
+                      onClick={() => setPeriodPreset(key)}
+                      className={`px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all ${
+                        periodPreset === key
+                          ? 'bg-primary text-white shadow-md shadow-primary/20'
+                          : 'bg-slate-100 text-slate-500 hover:bg-slate-200 hover:text-slate-700'
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+
+                {periodPreset === 'CUSTOM' && (
+                  <div className="flex items-center gap-2 ml-auto">
+                    <input
+                      type="date"
+                      value={periodCustomStart}
+                      onChange={e => setPeriodCustomStart(e.target.value)}
+                      className="py-1.5 px-3 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/30"
+                    />
+                    <span className="text-slate-400 text-xs font-bold">até</span>
+                    <input
+                      type="date"
+                      value={periodCustomEnd}
+                      onChange={e => setPeriodCustomEnd(e.target.value)}
+                      className="py-1.5 px-3 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/30"
+                    />
+                  </div>
+                )}
+
+                {periodPreset !== 'CUSTOM' && periodPreset !== 'ALL' && (
+                  <span className="ml-auto text-[10px] font-bold text-slate-400 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-lg whitespace-nowrap">
+                    {activePeriodRange.start} → {activePeriodRange.end}
+                  </span>
+                )}
+                {periodPreset === 'ALL' && (
+                  <span className="ml-auto text-[10px] font-bold text-slate-400 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-lg whitespace-nowrap">
+                    Todos os lançamentos
+                  </span>
+                )}
+              </div>
+
+              {/* Row 2: Account selector */}
+              <div className="flex flex-wrap items-center gap-3 px-4 py-3 bg-slate-50/60">
+                <div className="flex items-center gap-2 shrink-0">
+                  <Landmark size={14} className="text-blue-500" />
+                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Conta</span>
+                </div>
+
+                <div className="flex flex-wrap gap-1.5">
+                  <button
+                    onClick={() => setStatsAccountFilter('ALL')}
+                    className={`px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all ${
+                      statsAccountFilter === 'ALL'
+                        ? 'bg-blue-600 text-white shadow-md shadow-blue-200'
+                        : 'bg-white border border-slate-200 text-slate-500 hover:border-blue-300 hover:text-blue-600'
+                    }`}
+                  >
+                    Todas as contas
+                  </button>
+                  {accounts.map(account => (
+                    <button
+                      key={account.id}
+                      onClick={() => setStatsAccountFilter(account.id)}
+                      className={`px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all ${
+                        statsAccountFilter === account.id
+                          ? 'bg-blue-600 text-white shadow-md shadow-blue-200'
+                          : 'bg-white border border-slate-200 text-slate-500 hover:border-blue-300 hover:text-blue-600'
+                      }`}
+                    >
+                      {account.name}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Selected account info badge */}
+                {stats.selectedAccount && (
+                  <div className="ml-auto flex items-center gap-2 bg-blue-50 border border-blue-100 rounded-lg px-3 py-1.5">
+                    <div className="w-1.5 h-1.5 rounded-full bg-blue-500"></div>
+                    <span className="text-[10px] font-bold text-blue-700">{stats.selectedAccount.type}</span>
+                    <span className="text-[10px] text-blue-400">·</span>
+                    <span className="text-[10px] font-black text-blue-800">
+                      Saldo Inicial: {stats.selectedAccount.initial_balance.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                    </span>
+                  </div>
+                )}
+              </div>
+            </div>
+
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               <StatCard label="Saldo Atual" value={balanceMode === 'EFETIVADO' ? stats.balance : stats.projected} icon={<DollarSign className="text-primary" />} sub={balanceMode === 'EFETIVADO' ? 'Transações conciliadas' : 'Projeção fluxo futuro'} />
               <StatCard label="A Receber" value={stats.receivable} icon={<TrendingUp className="text-blue-600" />} sub="Próximos vencimentos" />
