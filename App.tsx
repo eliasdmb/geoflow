@@ -443,13 +443,16 @@ const App: React.FC = () => {
 
           const { from_account_id, to_account_id, amount, description, due_date, status, ...restOfData } = data;
 
+          const fromAccountName = accounts.find(a => a.id === from_account_id)?.name || from_account_id;
+          const toAccountName = accounts.find(a => a.id === to_account_id)?.name || to_account_id;
+
           // Create the expense transaction (debit from from_account_id)
           const expensePayload = {
             ...restOfData,
             user_id: uid,
             type: TransactionType.EXPENSE,
             amount: parseFloat(String(amount)),
-            description: `Transferência enviada para ${to_account_id}: ${description}`,
+            description: `Transferência enviada para ${toAccountName}: ${description}`,
             account: from_account_id,
             due_date: due_date,
             status: status,
@@ -464,7 +467,7 @@ const App: React.FC = () => {
             user_id: uid,
             type: TransactionType.INCOME,
             amount: parseFloat(String(amount)),
-            description: `Transferência recebida de ${from_account_id}: ${description}`,
+            description: `Transferência recebida de ${fromAccountName}: ${description}`,
             account: to_account_id,
             due_date: due_date,
             status: status,

@@ -592,7 +592,7 @@ ${registryMunicipality} - GO, ${today}.`;
           const certNumber = selectedCertification?.cert_number || project.certification_number || '______________';
           const signersText = allOwners2.map(o =>
             `${o.name.toUpperCase()}, ${(o as any).nationality || 'brasileiro'}, ${(o as any).marital_status || 'casado'}, ${(o as any).profession || 'agropecuarista'}, portador do CPF nº. ${o.cpf_cnpj}, residente e domiciliado em ${getAddr(o)}`
-          ).join(';');
+          ).join('; ');
           return `Ilustríssimo Sr. Oficial do Registro de Imóveis da Comarca de Rio Verde, Estado de Goiás.
 
 ${signersText}, proprietário(s) do imóvel rural denominado ${property.name.toUpperCase()}, localizado no município de Rio Verde/GO, devidamente inscrito no Serviço de Registro de Imóveis da comarca de Rio Verde/GO, sob a matrícula nº ${property.registration_number}, cadastrado no INCRA sob o nº ${property.incra_code || '________________'}, abaixo assinado(s), vem perante V. Sra., requerer a averbação do Georreferenciamento do referido imóvel acima descrito, conforme certificação no SIGEF/INCRA nº ${certNumber}, com a área de ${property.area_ha} ha de minha propriedade e declarar, sob pena de responsabilidade civil e criminal, que não houve alteração das divisas existentes dos imóveis confinantes especificados nas Plantas e memoriais descritivos em anexo e que foram respeitados os direitos dos confrontantes, conforme § 14 do artigo 213, da lei nº 6.015/73.`;
@@ -601,7 +601,7 @@ ${signersText}, proprietário(s) do imóvel rural denominado ${property.name.toU
         if (selectedRegistry?.cns === '02.648-4') {
           const signersText2 = allOwners2.map(o =>
             `${o.name.toUpperCase()}, Brasileiro, ${(o as any).marital_status || ''}, ${(o as any).profession || ''}, CPF: ${o.cpf_cnpj}, residente e domiciliado na ${getAddr(o)}, com e-mail: ${o.email || ''} e telefone: ${o.phone || ''}`
-          ).join(';');
+          ).join('; ');
           return `Ilma. Sra.
 Oficial do Registro de Imóveis e Anexos de Montividiu/GO
 
@@ -619,9 +619,9 @@ Pede Deferimento.`;
         const genericRegistryName = selectedRegistry?.name || 'Registro de Imóveis competente';
         const genericRegistryCity = selectedRegistry?.municipality || property.municipality || '__________';
         const genericCertNumber = selectedCertification?.cert_number || project.certification_number || '______________';
-        const signersText3 = allOwners2.map((o, i) =>
+        const signersText3 = allOwners2.map((o) =>
           `${o.name.toUpperCase()}, ${(o as any).nationality || 'brasileiro'}, ${(o as any).marital_status || 'casado'}, ${(o as any).profession || 'produtor rural'}, portador do CPF/CNPJ nº ${o.cpf_cnpj}, residente e domiciliado em ${getAddr(o)}`
-        ).join(';');
+        ).join('; ');
         return `Ilustríssimo(a) Sr(a). Oficial do ${genericRegistryName}, Comarca de ${genericRegistryCity}/GO.
 
 ${signersText3}, proprietário(s) do imóvel rural denominado ${property.name.toUpperCase()}, localizado no município de ${property.municipality}/GO, inscrito sob a matrícula nº ${property.registration_number}, cadastrado no INCRA sob o nº ${property.incra_code || '________________'}, vem, respeitosamente, requerer a Vossa Senhoria a averbação do georreferenciamento do imóvel acima descrito, conforme Certificação SIGEF/INCRA nº ${genericCertNumber}, com área de ${property.area_ha} ha.
@@ -629,10 +629,7 @@ ${signersText3}, proprietário(s) do imóvel rural denominado ${property.name.to
 Declara(m), sob as penas da lei, que não houve alteração das divisas reais e efetivas do imóvel registrado, bem como foram respeitados os direitos dos confrontantes especificados nas plantas e memoriais descritivos em anexo.
 
 Nestes Termos,
-Pede Deferimento.
-
-
-${allOwners2.map(o => `${o.name.toUpperCase()}\nCPF/CNPJ: ${o.cpf_cnpj}\nRequerente`).join(';')}`;
+Pede Deferimento.`;
       }
 
       case (targetStep.label.startsWith('Documentação (Checklist)') ? targetStep.label : 'Documentação (Checklist)'):
@@ -725,17 +722,16 @@ ${allOwners2.map(o => `${o.name.toUpperCase()}\nCPF/CNPJ: ${o.cpf_cnpj}\nRequere
       const headerImgData = headerCanvas.toDataURL('image/png');
       const headerHeightMm = headerCanvas.height * 210 / headerCanvas.width;
 
-      // Agora aplicamos os estilos ao docElement para que ele ocupe a largura útil exata do A4.
-      // Largura A4 (210mm) - Margem Esquerda (10mm) - Margem Direita (10mm) = 190mm.
+      // Aplicar largura A4 (190mm = 210mm - 10mm margem esq. - 10mm margem dir.)
       docElement.style.width = '190mm';
       docElement.style.minHeight = 'auto';
-      docElement.style.padding = '0'; // Removemos o padding para usar as margens globais do PDF
+      docElement.style.padding = '0';
 
       setGenerationMessage("Gerando conteúdo do documento...");
       setGenerationProgress(10);
 
-      const sideMargin = 10; // Mínimo seguro
-      const topMargin = headerHeightMm + 2; // Mantemos o espaço, com um gap mínimo
+      const sideMargin = 10;
+      const topMargin = headerHeightMm + 2;
 
       const opt = {
         margin: [topMargin, sideMargin, 10, sideMargin],
@@ -1629,18 +1625,24 @@ ${allOwners2.map(o => `${o.name.toUpperCase()}\nCPF/CNPJ: ${o.cpf_cnpj}\nRequere
                 })()}
                 <div className="flex-1 px-[2mm] pt-0 pb-[5mm]">
                   <div
-                    className="whitespace-pre-wrap text-slate-900 text-[12pt] text-justify leading-relaxed border border-slate-900 px-[5mm] pt-0 pb-[10mm] min-h-[150mm] flex flex-col"
+                    className="text-slate-900 text-[12pt] leading-relaxed px-[5mm] pt-0 pb-[10mm]"
                     style={{ boxSizing: 'border-box' }}
                   >
-                    <div className="text-center mb-2">
+                    <div className="text-center mb-4">
                       <h2 className="text-2xl font-black uppercase tracking-widest text-slate-900">
                         {selectedRegistry?.cns === '02.648-4' ? 'REQUERIMENTO' : 'REQUERIMENTO PARA AVERBAÇÃO'}
                       </h2>
                     </div>
 
-                    <div className="flex-1">
-                      {textContent}
-                    </div>
+                    <div
+                      style={{ lineHeight: '1.8', fontSize: '12pt', wordBreak: 'break-word', overflowWrap: 'break-word' }}
+                      dangerouslySetInnerHTML={{
+                        __html: textContent
+                          .split('\n')
+                          .map((line: string) => line.trim() === '' ? '<p style="margin:0.6em 0">&nbsp;</p>' : `<p style="margin:0 0 0.6em 0;text-align:justify">${line}</p>`)
+                          .join('')
+                      }}
+                    />
 
                     {selectedRegistry?.cns !== '02.612-0' && (
                       <>

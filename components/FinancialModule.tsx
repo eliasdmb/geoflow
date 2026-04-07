@@ -526,6 +526,20 @@ const FinancialModule: React.FC<FinancialModuleProps> = ({
       alert('Por favor, insira um valor numérico válido para o campo "Valor".');
       return;
     }
+    if (formData.type === TransactionType.TRANSFER) {
+      if (!formData.from_account_id) {
+        alert('Selecione a conta de origem para a transferência.');
+        return;
+      }
+      if (!formData.to_account_id) {
+        alert('Selecione a conta de destino para a transferência.');
+        return;
+      }
+      if (formData.from_account_id === formData.to_account_id) {
+        alert('As contas de origem e destino devem ser diferentes.');
+        return;
+      }
+    }
     // Se é edição de uma parcela de série, perguntar escopo da alteração
     if (isEditingSeries) {
       setShowInstallmentChoice(true);
@@ -607,7 +621,13 @@ const FinancialModule: React.FC<FinancialModuleProps> = ({
             is_recurring: formData.repeat_type === 'recurrence'
           });
         }
-        await onSaveTransaction(transactionsToSave as any);
+        // Transfers must be passed as a single object so the special transfer
+        // logic in App.tsx (creating an expense + income pair) is triggered.
+        if (formData.type === TransactionType.TRANSFER) {
+          await onSaveTransaction(transactionsToSave[0] as any);
+        } else {
+          await onSaveTransaction(transactionsToSave as any);
+        }
       }
 
       setShowModal(false);
@@ -1609,7 +1629,40 @@ const FinancialModule: React.FC<FinancialModuleProps> = ({
                   <input required type="date" className="w-full p-3 bg-slate-50 border border-slate-100 rounded-xl" value={formData.due_date} onChange={e => setFormData({ ...formData, due_date: e.target.value })} />
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
+                {formData.type === TransactionType.TRANSFER ? (
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label htmlFor="from_account_id" className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Conta de Origem</label>
+                      <select
+                        id="from_account_id"
+                        name="from_account_id"
+                        value={formData.from_account_id}
+                        onChange={e => setFormData({ ...formData, from_account_id: e.target.value })}
+                        className="w-full p-3 bg-slate-50 border border-slate-100 rounded-xl outline-none"
+                      >
+                        <option value="">Selecione a conta de origem</option>
+                        {accounts.map(account => (
+                          <option key={account.id} value={account.id}>{account.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label htmlFor="to_account_id" className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Conta de Destino</label>
+                      <select
+                        id="to_account_id"
+                        name="to_account_id"
+                        value={formData.to_account_id}
+                        onChange={e => setFormData({ ...formData, to_account_id: e.target.value })}
+                        className="w-full p-3 bg-slate-50 border border-slate-100 rounded-xl outline-none"
+                      >
+                        <option value="">Selecione a conta de destino</option>
+                        {accounts.map(account => (
+                          <option key={account.id} value={account.id}>{account.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                ) : (
                   <div>
                     <label htmlFor="account" className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Conta</label>
                     <select
@@ -1625,41 +1678,9 @@ const FinancialModule: React.FC<FinancialModuleProps> = ({
                       ))}
                     </select>
                   </div>
+                )}
 
-                  {formData.type === TransactionType.TRANSFER && (
-                    <>
-                      <div>
-                        <label htmlFor="from_account_id" className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Conta de Origem</label>
-                        <select
-                          id="from_account_id"
-                          name="from_account_id"
-                          value={formData.from_account_id}
-                          onChange={e => setFormData({ ...formData, from_account_id: e.target.value })}
-                          className="w-full p-3 bg-slate-50 border border-slate-100 rounded-xl outline-none"
-                        >
-                          <option value="">Selecione a conta de origem</option>
-                          {accounts.map(account => (
-                            <option key={account.id} value={account.id}>{account.name}</option>
-                          ))}
-                        </select>
-                      </div>
-                      <div>
-                        <label htmlFor="to_account_id" className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Conta de Destino</label>
-                        <select
-                          id="to_account_id"
-                          name="to_account_id"
-                          value={formData.to_account_id}
-                          onChange={e => setFormData({ ...formData, to_account_id: e.target.value })}
-                          className="w-full p-3 bg-slate-50 border border-slate-100 rounded-xl outline-none"
-                        >
-                          <option value="">Selecione a conta de destino</option>
-                          {accounts.map(account => (
-                            <option key={account.id} value={account.id}>{account.name}</option>
-                          ))}
-                        </select>
-                      </div>
-                    </>
-                  )}
+                <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Pessoal/Empresa</label>
                     <div className="flex gap-2 p-1 bg-slate-100 rounded-xl">
