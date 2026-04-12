@@ -44,10 +44,23 @@ export enum PaymentMethod {
   OTHER = 'Outro'
 }
 
+export interface FinancialProject {
+  id: string;
+  user_id: string;
+  name: string;
+  description?: string;
+  color: string;
+  budget?: number;
+  start_date?: string;
+  end_date?: string;
+  created_at: string;
+}
+
 export interface FinancialTransaction {
   id: string;
   user_id: string;
   project_id?: string;
+  financial_project_id?: string;
   description: string;
   amount: number;
   type: TransactionType;
@@ -252,6 +265,7 @@ export interface CreditCardExpense {
   installments: number;
   current_installment?: number; // For virtual installment display
   project_id?: string;
+  financial_project_id?: string;
   created_at: string;
 }
 

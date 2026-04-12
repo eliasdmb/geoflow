@@ -1,6 +1,6 @@
 // components/AppRouter.tsx
 import React from 'react';
-import { ViewState, Project, Client, RuralProperty, Professional, Service, Registry, SigefCertification, BudgetItemTemplate, FinancialTransaction, Appointment, CreditCard, CreditCardExpense, ProjectStatus, Account, WorkflowStepId, UserTask, ProjectExpense } from '../types';
+import { ViewState, Project, Client, RuralProperty, Professional, Service, Registry, SigefCertification, BudgetItemTemplate, FinancialTransaction, FinancialProject, Appointment, CreditCard, CreditCardExpense, ProjectStatus, Account, WorkflowStepId, UserTask, ProjectExpense } from '../types';
 import { WORKFLOW_STEPS_DEFINITION, CAR_WORKFLOW_STEPS_DEFINITION } from '../constants';
 import { supabase } from '../lib/supabase';
 import Dashboard from './Dashboard';
@@ -65,6 +65,9 @@ interface AppRouterProps {
   projectExpenses: ProjectExpense[];
   onAddExpense: (expense: Omit<ProjectExpense, 'id' | 'created_at'>) => Promise<void>;
   onDeleteExpense: (id: string) => Promise<void>;
+  financialProjects: FinancialProject[];
+  onSaveFinancialProject: (fp: Partial<FinancialProject>, id?: string) => Promise<void>;
+  onDeleteFinancialProject: (id: string) => Promise<void>;
 }
 
 const AppRouter: React.FC<AppRouterProps> = ({
@@ -101,6 +104,9 @@ const AppRouter: React.FC<AppRouterProps> = ({
   projectExpenses,
   onAddExpense,
   onDeleteExpense,
+  financialProjects,
+  onSaveFinancialProject,
+  onDeleteFinancialProject,
 }) => {
   const currentProject = projects.find(p => p.id === selectedProjectId);
 
@@ -122,6 +128,7 @@ const AppRouter: React.FC<AppRouterProps> = ({
           creditCards={creditCards}
           creditCardExpenses={creditCardExpenses}
           accounts={accounts}
+          financialProjects={financialProjects}
           onSaveTransaction={(t, id) => handleUpsert('financial_transactions', t, fetchInitialData, id)}
           onDeleteTransaction={(id) => handleDelete('financial_transactions', id)}
           onSaveCreditCard={(c, id) => handleUpsert('credit_cards', c, fetchInitialData, id)}
@@ -130,6 +137,8 @@ const AppRouter: React.FC<AppRouterProps> = ({
           onDeleteCreditCardExpense={(id) => handleDelete('credit_card_expenses', id)}
           onSaveAccount={handleSaveAccount}
           onDeleteAccount={(id) => handleDelete('accounts', id)}
+          onSaveFinancialProject={onSaveFinancialProject}
+          onDeleteFinancialProject={onDeleteFinancialProject}
         />
       </ProtectedRoute>;
       case 'PROJECT_DETAILS': {

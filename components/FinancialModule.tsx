@@ -27,6 +27,7 @@ import {
 } from 'lucide-react';
 import {
   Project,
+  FinancialProject,
   FinancialTransaction,
   TransactionType,
   TransactionStatus,
@@ -56,6 +57,7 @@ import ReportPDF from './ReportPDF';
 interface FinancialModuleProps {
   transactions: FinancialTransaction[];
   projects: Project[];
+  financialProjects: FinancialProject[];
   creditCards: CreditCard[];
   creditCardExpenses: CreditCardExpense[];
   onSaveTransaction: (transaction: Partial<FinancialTransaction>, id?: string) => Promise<void>;
@@ -67,6 +69,8 @@ interface FinancialModuleProps {
   onSaveAccount: (account: Partial<Account>, id?: string) => Promise<void>;
   onDeleteAccount: (id: string) => void;
   accounts: Account[];
+  onSaveFinancialProject: (fp: Partial<FinancialProject>, id?: string) => Promise<void>;
+  onDeleteFinancialProject: (id: string) => void;
 }
 
 const formatCurrency = (value: any) => {
@@ -78,6 +82,7 @@ const formatCurrency = (value: any) => {
 const FinancialModule: React.FC<FinancialModuleProps> = ({
   transactions,
   projects,
+  financialProjects,
   creditCards,
   creditCardExpenses,
   onSaveTransaction,
@@ -88,9 +93,11 @@ const FinancialModule: React.FC<FinancialModuleProps> = ({
   onDeleteCreditCardExpense,
   onSaveAccount,
   onDeleteAccount,
-  accounts
+  accounts,
+  onSaveFinancialProject,
+  onDeleteFinancialProject,
 }) => {
-  const [activeTab, setActiveTab] = useState<'FLUXO' | 'CARTOES' | 'RELATORIOS' | 'DRE'>('FLUXO');
+  const [activeTab, setActiveTab] = useState<'FLUXO' | 'PROJETOS' | 'CARTOES' | 'RELATORIOS' | 'DRE'>('FLUXO');
   const [balanceMode, setBalanceMode] = useState<'EFETIVADO' | 'PROJETADO'>('EFETIVADO');
   const [dreYear, setDreYear] = useState(new Date().getFullYear().toString());
   const [dreScope, setDreScope] = useState<'ALL' | 'Pessoal' | 'Empresa'>('Empresa');
@@ -98,6 +105,9 @@ const FinancialModule: React.FC<FinancialModuleProps> = ({
   const [showCardModal, setShowCardModal] = useState(false);
   const [showExpenseModal, setShowExpenseModal] = useState(false);
   const [showAccountModal, setShowAccountModal] = useState(false);
+  const [showFinancialProjectModal, setShowFinancialProjectModal] = useState(false);
+  const [editingFinancialProject, setEditingFinancialProject] = useState<FinancialProject | null>(null);
+  const [financialProjectFilter, setFinancialProjectFilter] = useState<string>('ALL');
   const [editingTransaction, setEditingTransaction] = useState<FinancialTransaction | null>(null);
   const [editingAccount, setEditingAccount] = useState<Account | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -179,6 +189,7 @@ const FinancialModule: React.FC<FinancialModuleProps> = ({
     payment_method: 'PIX' as any,
     due_date: new Date().toISOString().split('T')[0],
     project_id: '',
+    financial_project_id: '',
     account: '',
     from_account_id: '',
     to_account_id: '',
@@ -213,7 +224,17 @@ const FinancialModule: React.FC<FinancialModuleProps> = ({
     category: 'Outros',
     date: new Date().toISOString().split('T')[0],
     installments: '1',
-    project_id: ''
+    project_id: '',
+    financial_project_id: ''
+  });
+
+  const [fpFormData, setFpFormData] = useState({
+    name: '',
+    description: '',
+    color: '#22c55e',
+    budget: '',
+    start_date: '',
+    end_date: ''
   });
 
   const [newAccountFormData, setNewAccountFormData] = useState({
@@ -370,6 +391,7 @@ const FinancialModule: React.FC<FinancialModuleProps> = ({
       const matchesType = typeFilter === 'ALL' || t.type === typeFilter;
       const matchesStatus = statusFilter === 'ALL' || t.status === statusFilter;
       const matchesProject = projectFilter === 'ALL' || t.project_id === projectFilter;
+      const matchesFinancialProject = financialProjectFilter === 'ALL' || t.financial_project_id === financialProjectFilter;
       const matchesScope = scopeFilter === 'ALL' || (t.scope || 'Empresa') === scopeFilter;
       const matchesAccount = accountFilter === 'ALL' || t.account === accountFilter;
       const matchesMonth = (() => {
@@ -378,9 +400,9 @@ const FinancialModule: React.FC<FinancialModuleProps> = ({
         const ym = (t.due_date || '').slice(0, 7);
         return ym === monthFilter;
       })();
-      return matchesSearch && matchesType && matchesStatus && matchesProject && matchesScope && matchesAccount && matchesMonth;
+      return matchesSearch && matchesType && matchesStatus && matchesProject && matchesFinancialProject && matchesScope && matchesAccount && matchesMonth;
     }).sort((a, b) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime());
-  }, [transactions, searchTerm, typeFilter, statusFilter, projectFilter, scopeFilter, accountFilter, monthFilter]);
+  }, [transactions, searchTerm, typeFilter, statusFilter, projectFilter, financialProjectFilter, scopeFilter, accountFilter, monthFilter]);
 
   const filteredStats = useMemo(() => {
     const income = filteredTransactions
@@ -494,9 +516,10 @@ const FinancialModule: React.FC<FinancialModuleProps> = ({
       payment_method: transaction.payment_method,
       due_date: new Date(transaction.due_date).toISOString().split('T')[0],
       project_id: transaction.project_id || '',
+      financial_project_id: transaction.financial_project_id || '',
       account: transaction.account || '',
-      from_account_id: transaction.from_account_id || '', // Populate for transfers
-      to_account_id: transaction.to_account_id || '',     // Populate for transfers
+      from_account_id: transaction.from_account_id || '',
+      to_account_id: transaction.to_account_id || '',
       scope: transaction.scope || 'Empresa',
       notes: transaction.notes || '',
       repeat_type: 'none',
@@ -560,6 +583,7 @@ const FinancialModule: React.FC<FinancialModuleProps> = ({
       status: formData.status,
       payment_method: formData.payment_method,
       project_id: formData.project_id || undefined,
+      financial_project_id: formData.financial_project_id || undefined,
       account: formData.account || undefined,
       from_account_id: formData.from_account_id || undefined,
       to_account_id: formData.to_account_id || undefined,
@@ -641,6 +665,7 @@ const FinancialModule: React.FC<FinancialModuleProps> = ({
         payment_method: 'PIX' as any,
         due_date: new Date().toISOString().split('T')[0],
         project_id: '',
+        financial_project_id: '',
         account: '',
         from_account_id: '',
         to_account_id: '',
@@ -724,6 +749,60 @@ const FinancialModule: React.FC<FinancialModuleProps> = ({
     return account.initial_balance + balanceChange;
   };
 
+  const handleFpSave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSaving(true);
+    try {
+      await onSaveFinancialProject({
+        ...(editingFinancialProject && { id: editingFinancialProject.id }),
+        name: fpFormData.name,
+        description: fpFormData.description || undefined,
+        color: fpFormData.color,
+        budget: fpFormData.budget ? parseFloat(fpFormData.budget) : undefined,
+        start_date: fpFormData.start_date || undefined,
+        end_date: fpFormData.end_date || undefined
+      }, editingFinancialProject?.id);
+      setShowFinancialProjectModal(false);
+      setEditingFinancialProject(null);
+      setFpFormData({ name: '', description: '', color: '#22c55e', budget: '', start_date: '', end_date: '' });
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleEditFp = (fp: FinancialProject) => {
+    setEditingFinancialProject(fp);
+    setFpFormData({
+      name: fp.name,
+      description: fp.description || '',
+      color: fp.color,
+      budget: fp.budget ? String(fp.budget) : '',
+      start_date: fp.start_date || '',
+      end_date: fp.end_date || ''
+    });
+    setShowFinancialProjectModal(true);
+  };
+
+  const handleDeleteFp = (id: string) => {
+    if (window.confirm('Excluir este projeto financeiro? Os lançamentos vinculados não serão excluídos.')) {
+      onDeleteFinancialProject(id);
+    }
+  };
+
+  // Per-financial-project stats
+  const fpStats = useMemo(() => {
+    return financialProjects.map(fp => {
+      const related = transactions.filter(t => t.financial_project_id === fp.id);
+      const income = related.filter(t => t.type === TransactionType.INCOME).reduce((s, t) => s + (parseFloat(String(t.amount)) || 0), 0);
+      const expense = related.filter(t => t.type === TransactionType.EXPENSE).reduce((s, t) => s + (parseFloat(String(t.amount)) || 0), 0);
+      const paidExpense = related.filter(t => t.type === TransactionType.EXPENSE && t.status === TransactionStatus.PAID).reduce((s, t) => s + (parseFloat(String(t.amount)) || 0), 0);
+      return { fp, income, expense, paidExpense, net: income - expense, count: related.length };
+    });
+  }, [financialProjects, transactions]);
+
+
   const handleGenerateReport = () => {
     const filtered = transactions.filter(t => {
       const matchesDateRange = (!reportStartDate || new Date(t.due_date) >= new Date(reportStartDate)) &&
@@ -756,6 +835,12 @@ const FinancialModule: React.FC<FinancialModuleProps> = ({
               className={`px-3 sm:px-4 py-1.5 rounded-lg text-[10px] sm:text-xs font-bold transition-all ${activeTab === 'FLUXO' ? 'bg-white text-primary shadow-sm border border-slate-200/40' : 'text-slate-500 hover:text-slate-700'}`}
             >
               Fluxo
+            </button>
+            <button
+              onClick={() => setActiveTab('PROJETOS')}
+              className={`px-3 sm:px-4 py-1.5 rounded-lg text-[10px] sm:text-xs font-bold transition-all ${activeTab === 'PROJETOS' ? 'bg-white text-primary shadow-sm border border-slate-200/40' : 'text-slate-500 hover:text-slate-700'}`}
+            >
+              Projetos
             </button>
             <button
               onClick={() => setActiveTab('CARTOES')}
@@ -811,12 +896,25 @@ const FinancialModule: React.FC<FinancialModuleProps> = ({
             </button>
           </div>
           <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
-            <button
-              onClick={() => activeTab === 'FLUXO' ? setShowModal(true) : setShowExpenseModal(true)}
-              className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 bg-primary text-white rounded-xl hover:bg-primary-dark shadow-md shadow-primary/10 text-[10px] sm:text-xs font-black uppercase tracking-widest transition-all"
-            >
-              <Plus size={16} /> {activeTab === 'FLUXO' ? 'Novo Lançamento' : 'Nova Despesa Card'}
-            </button>
+            {activeTab === 'PROJETOS' ? (
+              <button
+                onClick={() => {
+                  setEditingFinancialProject(null);
+                  setFpFormData({ name: '', description: '', color: '#22c55e', budget: '', start_date: '', end_date: '' });
+                  setShowFinancialProjectModal(true);
+                }}
+                className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 bg-primary text-white rounded-xl hover:bg-primary-dark shadow-md shadow-primary/10 text-[10px] sm:text-xs font-black uppercase tracking-widest transition-all"
+              >
+                <Plus size={16} /> Novo Projeto
+              </button>
+            ) : (
+              <button
+                onClick={() => activeTab === 'FLUXO' ? setShowModal(true) : setShowExpenseModal(true)}
+                className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 bg-primary text-white rounded-xl hover:bg-primary-dark shadow-md shadow-primary/10 text-[10px] sm:text-xs font-black uppercase tracking-widest transition-all"
+              >
+                <Plus size={16} /> {activeTab === 'FLUXO' ? 'Novo Lançamento' : 'Nova Despesa Card'}
+              </button>
+            )}
             <button
               onClick={() => {
                 setEditingAccount(null);
@@ -951,6 +1049,56 @@ const FinancialModule: React.FC<FinancialModuleProps> = ({
               <StatCard label="A Pagar" value={stats.payable} icon={<TrendingDown className="text-rose-600" />} sub="Contas pendentes" />
               <StatCard label="Saldo Projetado" value={stats.projected} icon={<TrendingUp className="text-violet-600" />} sub="Projeção fluxo futuro" />
             </div>
+
+            {/* Active Financial Project Banner */}
+            {financialProjectFilter !== 'ALL' && (() => {
+              const activeFp = financialProjects.find(fp => fp.id === financialProjectFilter);
+              const activeStats = fpStats.find(s => s.fp.id === financialProjectFilter);
+              if (!activeFp || !activeStats) return null;
+              return (
+                <div
+                  className="rounded-2xl border-2 p-4 flex flex-wrap items-center gap-4 animate-in fade-in slide-in-from-top-2 duration-300"
+                  style={{ borderColor: activeFp.color + '66', backgroundColor: activeFp.color + '0d' }}
+                >
+                  <div
+                    className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
+                    style={{ backgroundColor: activeFp.color + '22' }}
+                  >
+                    <Briefcase size={16} style={{ color: activeFp.color }} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[10px] font-black uppercase tracking-widest" style={{ color: activeFp.color }}>Filtrando por projeto financeiro</p>
+                    <p className="text-sm font-black text-slate-800 truncate">{activeFp.name}</p>
+                  </div>
+                  <div className="flex items-center gap-4 flex-wrap">
+                    <div className="text-center">
+                      <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Gasto</p>
+                      <p className="text-sm font-black text-rose-600">{formatCurrency(activeStats.expense)}</p>
+                    </div>
+                    <div className="text-center">
+                      <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Receita</p>
+                      <p className="text-sm font-black text-emerald-600">{formatCurrency(activeStats.income)}</p>
+                    </div>
+                    <div className="text-center">
+                      <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Líquido</p>
+                      <p className={`text-sm font-black ${activeStats.net >= 0 ? 'text-blue-600' : 'text-rose-600'}`}>{formatCurrency(activeStats.net)}</p>
+                    </div>
+                    {activeFp.budget && (
+                      <div className="text-center">
+                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Orçamento</p>
+                        <p className="text-sm font-black text-slate-600">{formatCurrency(activeFp.budget)}</p>
+                      </div>
+                    )}
+                    <button
+                      onClick={() => setFinancialProjectFilter('ALL')}
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-[9px] font-black uppercase tracking-widest text-slate-500 hover:text-rose-500 hover:border-rose-200 transition-all"
+                    >
+                      <X size={10} /> Limpar filtro
+                    </button>
+                  </div>
+                </div>
+              );
+            })()}
 
             {/* Lembretes Financeiros */}
             {reminders.hasReminders && (
@@ -1194,9 +1342,19 @@ const FinancialModule: React.FC<FinancialModuleProps> = ({
                   ))}
                 </select>
                 <select value={projectFilter} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setProjectFilter(e.target.value)} className="py-2 px-3 bg-white border border-slate-200 rounded-xl text-sm text-slate-600">
-                  <option value="ALL">Todos os projetos</option>
+                  <option value="ALL">Todos os geo-projetos</option>
                   {projects.map((p: { id: string; title: string }) => (
                     <option key={p.id} value={p.id}>{p.title}</option>
+                  ))}
+                </select>
+                <select
+                  value={financialProjectFilter}
+                  onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setFinancialProjectFilter(e.target.value)}
+                  className={`py-2 px-3 border rounded-xl text-sm font-bold transition-all ${financialProjectFilter !== 'ALL' ? 'bg-primary text-white border-primary' : 'bg-white text-slate-600 border-slate-200'}`}
+                >
+                  <option value="ALL">Todos os projetos fin.</option>
+                  {financialProjects.map(fp => (
+                    <option key={fp.id} value={fp.id}>{fp.name}</option>
                   ))}
                 </select>
               </div>
@@ -1331,6 +1489,188 @@ const FinancialModule: React.FC<FinancialModuleProps> = ({
                 </div>
               </div>
             </div>
+          </div>
+        )
+      }
+
+      {
+        activeTab === 'PROJETOS' && (
+          <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+
+            {/* Header stats strip */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="bg-white rounded-2xl border border-slate-200/60 shadow-sm p-5 flex items-center gap-4">
+                <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+                  <Briefcase size={18} className="text-primary" />
+                </div>
+                <div>
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Total Projetos</p>
+                  <p className="text-xl font-black text-slate-800">{financialProjects.length}</p>
+                </div>
+              </div>
+              <div className="bg-white rounded-2xl border border-slate-200/60 shadow-sm p-5 flex items-center gap-4">
+                <div className="w-10 h-10 rounded-xl bg-rose-50 flex items-center justify-center shrink-0">
+                  <TrendingDown size={18} className="text-rose-500" />
+                </div>
+                <div>
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Total Gasto</p>
+                  <p className="text-xl font-black text-rose-600">
+                    {formatCurrency(fpStats.reduce((s, f) => s + f.expense, 0))}
+                  </p>
+                </div>
+              </div>
+              <div className="bg-white rounded-2xl border border-slate-200/60 shadow-sm p-5 flex items-center gap-4">
+                <div className="w-10 h-10 rounded-xl bg-emerald-50 flex items-center justify-center shrink-0">
+                  <TrendingUp size={18} className="text-emerald-500" />
+                </div>
+                <div>
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Total Receitas</p>
+                  <p className="text-xl font-black text-emerald-600">
+                    {formatCurrency(fpStats.reduce((s, f) => s + f.income, 0))}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Project cards grid */}
+            {financialProjects.length === 0 ? (
+              <div className="bg-white rounded-3xl border-2 border-dashed border-slate-200 p-16 flex flex-col items-center justify-center text-center">
+                <div className="w-16 h-16 bg-slate-50 rounded-2xl flex items-center justify-center mb-4">
+                  <Briefcase size={28} className="text-slate-300" />
+                </div>
+                <h3 className="text-sm font-bold text-slate-600 mb-1">Nenhum projeto cadastrado</h3>
+                <p className="text-xs text-slate-400 max-w-xs">
+                  Crie projetos para agrupar e rastrear gastos por categoria. Ex: "Reforma da Casa", "Viagem de Férias".
+                </p>
+                <button
+                  onClick={() => {
+                    setEditingFinancialProject(null);
+                    setFpFormData({ name: '', description: '', color: '#22c55e', budget: '', start_date: '', end_date: '' });
+                    setShowFinancialProjectModal(true);
+                  }}
+                  className="mt-6 flex items-center gap-2 px-5 py-2.5 bg-primary text-white rounded-xl font-black text-xs uppercase tracking-widest hover:bg-primary-dark transition-all shadow-md shadow-primary/20"
+                >
+                  <Plus size={14} /> Criar primeiro projeto
+                </button>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+                {fpStats.map(({ fp, income, expense, paidExpense, net, count }) => {
+                  const budgetPct = fp.budget && fp.budget > 0 ? Math.min(100, (paidExpense / fp.budget) * 100) : null;
+                  const isOver = fp.budget ? paidExpense > fp.budget : false;
+                  return (
+                    <div
+                      key={fp.id}
+                      className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden group hover:shadow-md hover:-translate-y-0.5 transition-all duration-300"
+                    >
+                      {/* Color bar */}
+                      <div className="h-1.5 w-full" style={{ backgroundColor: fp.color }} />
+
+                      <div className="p-5">
+                        {/* Header */}
+                        <div className="flex items-start justify-between mb-4">
+                          <div className="flex items-center gap-3">
+                            <div
+                              className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
+                              style={{ backgroundColor: fp.color + '22', border: `1.5px solid ${fp.color}44` }}
+                            >
+                              <Briefcase size={15} style={{ color: fp.color }} />
+                            </div>
+                            <div>
+                              <h4 className="text-sm font-black text-slate-800 leading-tight">{fp.name}</h4>
+                              {fp.description && (
+                                <p className="text-[10px] text-slate-400 mt-0.5 line-clamp-1">{fp.description}</p>
+                              )}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button
+                              onClick={() => handleEditFp(fp)}
+                              className="p-1.5 text-slate-300 hover:text-blue-500 rounded-lg transition-colors"
+                              title="Editar"
+                            >
+                              <FileText size={13} />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteFp(fp.id)}
+                              className="p-1.5 text-slate-300 hover:text-rose-500 rounded-lg transition-colors"
+                              title="Excluir"
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Stats */}
+                        <div className="grid grid-cols-2 gap-3 mb-4">
+                          <div className="bg-rose-50/60 rounded-xl p-3">
+                            <p className="text-[9px] font-black text-rose-400 uppercase tracking-widest mb-0.5">Total Gasto</p>
+                            <p className="text-sm font-black text-rose-700">{formatCurrency(expense)}</p>
+                          </div>
+                          <div className="bg-emerald-50/60 rounded-xl p-3">
+                            <p className="text-[9px] font-black text-emerald-400 uppercase tracking-widest mb-0.5">Receitas</p>
+                            <p className="text-sm font-black text-emerald-700">{formatCurrency(income)}</p>
+                          </div>
+                        </div>
+
+                        {/* Net balance */}
+                        <div className={`rounded-xl p-3 mb-4 ${net >= 0 ? 'bg-blue-50/60' : 'bg-rose-50/60'}`}>
+                          <div className="flex justify-between items-center">
+                            <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Saldo Líquido</span>
+                            <span className={`text-sm font-black ${net >= 0 ? 'text-blue-700' : 'text-rose-700'}`}>{formatCurrency(net)}</span>
+                          </div>
+                        </div>
+
+                        {/* Budget bar */}
+                        {fp.budget && fp.budget > 0 && (
+                          <div className="mb-4">
+                            <div className="flex justify-between items-center mb-1.5">
+                              <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Orçamento</span>
+                              <span className={`text-[10px] font-black ${isOver ? 'text-rose-600' : 'text-slate-600'}`}>
+                                {formatCurrency(paidExpense)} / {formatCurrency(fp.budget)}
+                              </span>
+                            </div>
+                            <div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
+                              <div
+                                className={`h-full rounded-full transition-all ${isOver ? 'bg-rose-500' : 'bg-primary'}`}
+                                style={{ width: `${budgetPct}%` }}
+                              />
+                            </div>
+                            {isOver && (
+                              <p className="text-[9px] text-rose-500 font-bold mt-1">
+                                ⚠ Orçamento excedido em {formatCurrency(paidExpense - fp.budget)}
+                              </p>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Dates and action */}
+                        <div className="flex items-center justify-between pt-3 border-t border-slate-50">
+                          <div className="flex items-center gap-2">
+                            {fp.start_date && (
+                              <span className="text-[9px] text-slate-400 font-bold">
+                                {fp.start_date.slice(0, 7)} {fp.end_date ? `→ ${fp.end_date.slice(0, 7)}` : ''}
+                              </span>
+                            )}
+                            <span className="text-[9px] text-slate-400">{count} lançamento{count !== 1 ? 's' : ''}</span>
+                          </div>
+                          <button
+                            onClick={() => {
+                              setFinancialProjectFilter(fp.id);
+                              setActiveTab('FLUXO');
+                            }}
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all text-white hover:opacity-90 shadow-sm"
+                            style={{ backgroundColor: fp.color }}
+                          >
+                            <Filter size={10} /> Ver lançamentos
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         )
       }
@@ -1756,6 +2096,22 @@ const FinancialModule: React.FC<FinancialModuleProps> = ({
                   />
                 </div>
 
+                {financialProjects.length > 0 && (
+                  <div>
+                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Projeto Financeiro</label>
+                    <select
+                      className="w-full p-3 bg-slate-50 border border-slate-100 rounded-xl text-sm"
+                      value={formData.financial_project_id}
+                      onChange={e => setFormData({ ...formData, financial_project_id: e.target.value })}
+                    >
+                      <option value="">Nenhum</option>
+                      {financialProjects.map(fp => (
+                        <option key={fp.id} value={fp.id}>{fp.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
                 {!editingTransaction && (
                   <div className="p-4 bg-slate-50 border border-slate-100 rounded-2xl space-y-4">
                     <div className="flex items-center justify-between">
@@ -1953,6 +2309,117 @@ const FinancialModule: React.FC<FinancialModuleProps> = ({
         </div>
       )
       }
+      {showFinancialProjectModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-400/10 backdrop-blur-md overflow-y-auto">
+          <div className="bg-white rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden animate-in zoom-in duration-300 relative my-auto">
+            <div className="p-6 bg-slate-50 border-b border-slate-200 flex items-center justify-between shrink-0">
+              <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest">
+                {editingFinancialProject ? 'Editar Projeto' : 'Novo Projeto Financeiro'}
+              </h3>
+              <button onClick={() => { setShowFinancialProjectModal(false); setEditingFinancialProject(null); }} className="p-2 text-slate-400 hover:text-rose-500 rounded-full transition-all">
+                <X size={20} />
+              </button>
+            </div>
+            <form onSubmit={handleFpSave} className="p-6 space-y-4 max-h-[80vh] overflow-y-auto">
+              <div className="grid grid-cols-1 gap-4">
+                <div>
+                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 ml-1">Nome do Projeto *</label>
+                  <input
+                    type="text"
+                    required
+                    className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-primary"
+                    placeholder="Ex: Reforma da Casa, Viagem de Férias..."
+                    value={fpFormData.name}
+                    onChange={e => setFpFormData({ ...fpFormData, name: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 ml-1">Descrição</label>
+                  <textarea
+                    rows={2}
+                    className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-primary resize-none"
+                    placeholder="Descrição opcional..."
+                    value={fpFormData.description}
+                    onChange={e => setFpFormData({ ...fpFormData, description: e.target.value })}
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 ml-1">Orçamento (R$)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-primary"
+                      placeholder="0,00"
+                      value={fpFormData.budget}
+                      onChange={e => setFpFormData({ ...fpFormData, budget: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 ml-1">Cor</label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="color"
+                        className="w-10 h-10 rounded-xl border border-slate-200 cursor-pointer p-1 bg-slate-50"
+                        value={fpFormData.color}
+                        onChange={e => setFpFormData({ ...fpFormData, color: e.target.value })}
+                      />
+                      <div className="flex flex-wrap gap-1.5">
+                        {['#22c55e','#3b82f6','#f59e0b','#ef4444','#8b5cf6','#06b6d4','#f97316'].map(c => (
+                          <button
+                            key={c}
+                            type="button"
+                            onClick={() => setFpFormData({ ...fpFormData, color: c })}
+                            className="w-5 h-5 rounded-full border-2 transition-all"
+                            style={{ backgroundColor: c, borderColor: fpFormData.color === c ? '#1e293b' : 'transparent' }}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 ml-1">Data Início</label>
+                    <input
+                      type="date"
+                      className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-primary"
+                      value={fpFormData.start_date}
+                      onChange={e => setFpFormData({ ...fpFormData, start_date: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 ml-1">Data Fim</label>
+                    <input
+                      type="date"
+                      className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-primary"
+                      value={fpFormData.end_date}
+                      onChange={e => setFpFormData({ ...fpFormData, end_date: e.target.value })}
+                    />
+                  </div>
+                </div>
+              </div>
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => { setShowFinancialProjectModal(false); setEditingFinancialProject(null); }}
+                  className="flex-1 py-3 border border-slate-200 text-slate-600 rounded-2xl font-bold text-sm"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSaving}
+                  className="flex-1 py-3 bg-primary text-white rounded-2xl font-black uppercase tracking-widest hover:bg-primary-dark shadow-lg shadow-primary/10 disabled:opacity-50 flex items-center justify-center gap-2 text-xs"
+                >
+                  {isSaving ? <><Loader2 size={16} className="animate-spin" /> Salvando...</> : (editingFinancialProject ? 'Salvar Alterações' : 'Criar Projeto')}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
       {showAccountModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-400/10 backdrop-blur-md overflow-y-auto">
           <div className="bg-white rounded-3xl w-full max-w-md shadow-2xl overflow-hidden animate-in zoom-in duration-300 relative my-auto">

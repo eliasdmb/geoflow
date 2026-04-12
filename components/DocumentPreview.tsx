@@ -17,6 +17,19 @@ import {
   Trash2
 } from 'lucide-react';
 import {
+  Document,
+  Packer,
+  Paragraph,
+  TextRun,
+  AlignmentType,
+  BorderStyle,
+  convertInchesToTwip,
+  Table,
+  TableRow,
+  TableCell,
+  WidthType,
+} from 'docx';
+import {
   Project,
   WorkflowStep,
   Client,
@@ -793,6 +806,339 @@ Pede Deferimento.`;
     }
   };
 
+  const handleGenerateWord = async () => {
+    if (!client || !property) return;
+
+    setIsGenerating(true);
+    setGenerationMessage('Gerando documento Word...');
+    setGenerationProgress(20);
+
+    try {
+      const children: (Paragraph | Table)[] = [];
+
+      // ── helpers ──────────────────────────────────────────────────────────
+      const sp = (after = 120) => new Paragraph({ text: '', spacing: { after } });
+
+      const noBorder = { style: BorderStyle.NONE, size: 0, color: 'ffffff' };
+      const cellNoBorder = { top: noBorder, bottom: noBorder, left: noBorder, right: noBorder };
+
+      const cell = (text: string, opts: {
+        bold?: boolean; size?: number; align?: (typeof AlignmentType)[keyof typeof AlignmentType];
+        width?: number; fill?: string; span?: number;
+      } = {}) => new TableCell({
+        columnSpan: opts.span,
+        width: opts.width ? { size: opts.width, type: WidthType.PERCENTAGE } : undefined,
+        shading: opts.fill ? { fill: opts.fill } : undefined,
+        borders: cellNoBorder,
+        children: [new Paragraph({
+          alignment: opts.align ?? AlignmentType.LEFT,
+          children: [new TextRun({ text, bold: opts.bold, size: opts.size ?? 20 })],
+          spacing: { after: 40 },
+        })],
+      });
+
+      // ── doc number + date (top right) ───────────────────────────────────
+      if (step.label !== 'Requerimento para o Cartório') {
+        children.push(new Paragraph({
+          alignment: AlignmentType.RIGHT,
+          children: [
+            new TextRun({ text: `${getDocPrefix(step.label)} ${docNumber}`, bold: true, size: 20, color: '374151' }),
+            new TextRun({ text: `   ${today}`, size: 18, color: '9ca3af' }),
+          ],
+          spacing: { after: 300 },
+        }));
+      }
+
+      // ── document title (centered, underlined) ───────────────────────────
+      const isRequerimento = step.label === 'Requerimento para o Cartório';
+      const showTitle = step.label !== 'RECIBO'
+        && !isRequerimento
+        && step.step_id !== WorkflowStepId.DOCUMENTATION;
+
+      if (showTitle) {
+        children.push(new Paragraph({
+          alignment: AlignmentType.CENTER,
+          children: [new TextRun({ text: step.label.toUpperCase(), bold: true, size: 24 })],
+          spacing: { before: 0, after: 400 },
+          border: {
+            bottom: { style: BorderStyle.SINGLE, size: 6, color: 'e2e8f0', space: 6 },
+          },
+        }));
+      }
+
+      // ── Requerimento title ───────────────────────────────────────────────
+      if (isRequerimento) {
+        const reqTitle = selectedRegistry?.cns === '02.648-4' ? 'REQUERIMENTO' : 'REQUERIMENTO PARA AVERBAÇÃO';
+        children.push(new Paragraph({
+          alignment: AlignmentType.CENTER,
+          children: [new TextRun({ text: reqTitle, bold: true, size: 28 })],
+          spacing: { before: 0, after: 400 },
+        }));
+      }
+
+      // ════════════════════════════════════════════════════════════════════
+      // ORÇAMENTO — build proper table from items[]
+      // ════════════════════════════════════════════════════════════════════
+      if (step.label === 'Orçamento') {
+        children.push(new Paragraph({
+          children: [
+            new TextRun({ text: 'Objeto:  ', bold: true, size: 20 }),
+            new TextRun({ text: service?.name || 'Serviços Técnicos de Georreferenciamento', size: 20 }),
+          ],
+          spacing: { after: 80 },
+        }));
+        children.push(new Paragraph({
+          children: [
+            new TextRun({ text: 'Imóvel:  ', bold: true, size: 20 }),
+            new TextRun({ text: `${property.name} — ${property.area_ha} ha`, size: 20 }),
+          ],
+          spacing: { after: 80 },
+        }));
+        children.push(new Paragraph({
+          children: [
+            new TextRun({ text: 'Cliente:  ', bold: true, size: 20 }),
+            new TextRun({ text: client.name, size: 20 }),
+          ],
+          spacing: { after: 80 },
+        }));
+        children.push(new Paragraph({
+          children: [
+            new TextRun({ text: 'Validade:  ', bold: true, size: 20 }),
+            new TextRun({ text: '15 Dias', size: 20 }),
+          ],
+          spacing: { after: 280 },
+        }));
+
+        const headerRow = new TableRow({
+          children: [
+            cell('Descrição do Item', { bold: true, size: 18, width: 55, fill: 'e2e8f0' }),
+            cell('Qtd.', { bold: true, size: 18, width: 10, align: AlignmentType.CENTER, fill: 'e2e8f0' }),
+            cell('Valor Unit.', { bold: true, size: 18, width: 18, align: AlignmentType.RIGHT, fill: 'e2e8f0' }),
+            cell('Subtotal', { bold: true, size: 18, width: 17, align: AlignmentType.RIGHT, fill: 'e2e8f0' }),
+          ],
+        });
+
+        const itemRows = items.map(item => new TableRow({
+          children: [
+            cell(item.description, { size: 20 }),
+            cell(String(item.qty), { size: 20, align: AlignmentType.CENTER }),
+            cell(`R$ ${item.price.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, { size: 20, align: AlignmentType.RIGHT }),
+            cell(`R$ ${(item.price * item.qty).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, { size: 20, align: AlignmentType.RIGHT }),
+          ],
+        }));
+
+        const totalRow = new TableRow({
+          children: [
+            cell('VALOR TOTAL DO INVESTIMENTO', { bold: true, size: 20, span: 3, align: AlignmentType.RIGHT, fill: 'f0fdf4' }),
+            cell(`R$ ${totalFinal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, { bold: true, size: 22, align: AlignmentType.RIGHT, fill: 'f0fdf4' }),
+          ],
+        });
+
+        children.push(new Table({
+          width: { size: 100, type: WidthType.PERCENTAGE },
+          rows: [headerRow, ...itemRows, totalRow],
+        }));
+
+        children.push(sp(200));
+        children.push(new Paragraph({
+          children: [new TextRun({ text: `Por extenso: ${numeroPorExtenso(totalFinal)}`, size: 18, color: '64748b' })],
+          spacing: { after: 80 },
+        }));
+
+      } else {
+        // ════════════════════════════════════════════════════════════════
+        // TEXT DOCUMENTS — parse textContent with smart formatting
+        // ════════════════════════════════════════════════════════════════
+        const lines = textContent.split('\n');
+
+        for (const raw of lines) {
+          const trimmed = raw.trim();
+
+          // ── empty line ─────────────────────────────────────────────
+          if (trimmed === '') {
+            children.push(sp(160));
+            continue;
+          }
+
+          // ── CLÁUSULA heading ───────────────────────────────────────
+          if (/^CLÁUSULA\s/i.test(trimmed)) {
+            children.push(new Paragraph({
+              children: [new TextRun({ text: trimmed, bold: true, size: 22 })],
+              spacing: { before: 320, after: 120 },
+            }));
+            continue;
+          }
+
+          // ── numbered section (e.g. "1.\tIDENTIFICAÇÃO") ──────────
+          if (/^\d+\.\s*\t/.test(raw)) {
+            const parts = raw.split('\t').map(p => p.trim()).filter(Boolean);
+            children.push(new Paragraph({
+              children: parts.map((p, pi) =>
+                new TextRun({ text: (pi === 0 ? p : '   ' + p), bold: true, size: 22 })
+              ),
+              spacing: { before: 280, after: 120 },
+            }));
+            continue;
+          }
+
+          // ── tab-separated pairs (Laudo field rows) ─────────────────
+          if (raw.includes('\t')) {
+            const parts = raw.split('\t').map(p => p.trim());
+            const runs: TextRun[] = [];
+            for (let pi = 0; pi < parts.length; pi++) {
+              const p = parts[pi];
+              if (!p) continue;
+              const isLabel = p.endsWith(':') || /^[A-ZÁÉÍÓÚÇÃa-záéíóúçã][^:]{0,25}:$/.test(p);
+              if (runs.length > 0) runs.push(new TextRun({ text: '   ', size: 20 }));
+              if (isLabel) {
+                runs.push(new TextRun({ text: p, bold: true, size: 20 }));
+              } else {
+                runs.push(new TextRun({ text: p, size: 20 }));
+              }
+            }
+            children.push(new Paragraph({
+              children: runs.length > 0 ? runs : [new TextRun({ text: trimmed, size: 20 })],
+              spacing: { after: 60 },
+            }));
+            continue;
+          }
+
+          // ── LABEL: value (single line, e.g. "Nome: João") ──────────
+          const colonIdx = trimmed.indexOf(': ');
+          if (colonIdx > 0 && colonIdx < 35 && !trimmed.slice(0, colonIdx).includes('. ')) {
+            const label = trimmed.slice(0, colonIdx);
+            const value = trimmed.slice(colonIdx + 2);
+            children.push(new Paragraph({
+              children: [
+                new TextRun({ text: `${label}: `, bold: true, size: 20 }),
+                new TextRun({ text: value, size: 20 }),
+              ],
+              spacing: { after: 60 },
+            }));
+            continue;
+          }
+
+          // ── ALL-CAPS section title (e.g. "CONTRATANTE:", "TESTEMUNHAS:") ─
+          const isAllCaps = trimmed === trimmed.toUpperCase()
+            && trimmed.length >= 4
+            && /^[A-ZÁÉÍÓÚÀÃÕÂÊÔÇÜ\s\d.,:\-–—\/()+]+$/.test(trimmed);
+          if (isAllCaps && trimmed.length < 60) {
+            children.push(new Paragraph({
+              children: [new TextRun({ text: trimmed, bold: true, size: 20 })],
+              spacing: { before: 200, after: 80 },
+            }));
+            continue;
+          }
+
+          // ── regular justified paragraph ─────────────────────────────
+          children.push(new Paragraph({
+            children: [new TextRun({ text: trimmed, size: 20 })],
+            alignment: AlignmentType.JUSTIFIED,
+            spacing: { after: 80 },
+          }));
+        }
+
+        // ── Requerimento: date + signature block ─────────────────────────
+        if (isRequerimento && selectedRegistry?.cns !== '02.612-0') {
+          const allOwners = [client, ...additionalOwners];
+          const city = selectedRegistry?.municipality || property.municipality || 'Rio Verde';
+
+          children.push(sp(300));
+          children.push(new Paragraph({
+            alignment: AlignmentType.RIGHT,
+            children: [new TextRun({ text: getFullDate(customDate, city), size: 20 })],
+            spacing: { after: 600 },
+          }));
+
+          // Signature lines — one per owner, centred in a table row
+          const sigCells = allOwners.map(owner => new TableCell({
+            borders: cellNoBorder,
+            children: [
+              new Paragraph({
+                alignment: AlignmentType.CENTER,
+                children: [new TextRun({ text: '________________________________', size: 20 })],
+                spacing: { after: 60 },
+              }),
+              new Paragraph({
+                alignment: AlignmentType.CENTER,
+                children: [new TextRun({ text: owner.name.toUpperCase(), bold: true, size: 20 })],
+                spacing: { after: 40 },
+              }),
+              new Paragraph({
+                alignment: AlignmentType.CENTER,
+                children: [new TextRun({ text: 'Proprietário do Imóvel', size: 18, color: '64748b' })],
+                spacing: { after: 40 },
+              }),
+              new Paragraph({
+                alignment: AlignmentType.CENTER,
+                children: [new TextRun({ text: `CPF/CNPJ: ${owner.cpf_cnpj}`, size: 18, color: '9ca3af' })],
+                spacing: { after: 0 },
+              }),
+            ],
+          }));
+
+          // Split into rows of 2 signatures max
+          for (let i = 0; i < sigCells.length; i += 2) {
+            const rowCells = sigCells.slice(i, i + 2);
+            // Pad with empty cell if odd number
+            if (rowCells.length === 1) {
+              rowCells.push(new TableCell({ borders: cellNoBorder, children: [new Paragraph({ text: '' })] }));
+            }
+            children.push(new Table({
+              width: { size: 100, type: WidthType.PERCENTAGE },
+              rows: [new TableRow({ children: rowCells })],
+            }));
+            children.push(sp(240));
+          }
+        }
+      }
+
+      // ── build Document ───────────────────────────────────────────────────
+      const doc = new Document({
+        sections: [{
+          properties: {
+            page: {
+              margin: {
+                top: convertInchesToTwip(1.0),
+                bottom: convertInchesToTwip(0.9),
+                left: convertInchesToTwip(1.2),
+                right: convertInchesToTwip(1.0),
+              },
+            },
+          },
+          children,
+        }],
+      });
+
+      setGenerationProgress(70);
+      setGenerationMessage('Salvando arquivo...');
+
+      const blob = await Packer.toBlob(doc);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${step.label}_${property?.name || 'doc'}.docx`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      setGenerationProgress(100);
+      setGenerationMessage('Concluído!');
+      await new Promise(resolve => setTimeout(resolve, 800));
+
+    } catch (err) {
+      console.error('Erro ao gerar Word:', err);
+      alert('Erro ao gerar documento Word. Tente novamente.');
+    } finally {
+      setTimeout(() => {
+        setIsGenerating(false);
+        setGenerationProgress(0);
+        setGenerationMessage('');
+      }, 300);
+    }
+  };
+
   if (!client || !property) {
     return (
       <div className="fixed inset-0 z-[100] flex bg-slate-400/10 backdrop-blur-md">
@@ -874,6 +1220,9 @@ Pede Deferimento.`;
             </button>
             <button onClick={handleGeneratePDF} disabled={isGenerating} className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-3 py-1.5 bg-primary text-white text-[10px] font-black rounded-lg hover:bg-primary-dark transition-all shadow-lg shadow-primary/10 disabled:opacity-50 uppercase tracking-widest">
               {isGenerating ? <Loader2 size={14} className="animate-spin" /> : <Printer size={14} />} PDF
+            </button>
+            <button onClick={handleGenerateWord} disabled={isGenerating} className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-3 py-1.5 bg-blue-600 text-white text-[10px] font-black rounded-lg hover:bg-blue-700 transition-all shadow-lg shadow-blue-200/50 disabled:opacity-50 uppercase tracking-widest">
+              {isGenerating ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />} Word
             </button>
             <button onClick={onClose} className="p-2 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-xl transition-all"><X size={20} /></button>
           </div>

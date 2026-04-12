@@ -38,6 +38,7 @@ import {
   BudgetItemTemplate,
   Registry,
   FinancialTransaction,
+  FinancialProject,
   Appointment,
   CreditCard,
   CreditCardExpense,
@@ -135,6 +136,7 @@ const App: React.FC = () => {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [tasks, setTasks] = useState<UserTask[]>([]);
   const [projectExpenses, setProjectExpenses] = useState<ProjectExpense[]>([]);
+  const [financialProjects, setFinancialProjects] = useState<FinancialProject[]>([]);
 
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   // Initialize sidebar based on window width if available, otherwise default to true (desktop)
@@ -225,7 +227,8 @@ const App: React.FC = () => {
             creditCardExpensesResponse,
             accountsResponse,
             tasksResponse,
-            projectExpensesResponse
+            projectExpensesResponse,
+            financialProjectsResponse
           ] = await Promise.all([
             supabase.from('financial_transactions').select('*').eq('user_id', uid).order('due_date', { ascending: false }),
             supabase.from('properties').select('*').eq('user_id', uid),
@@ -239,7 +242,8 @@ const App: React.FC = () => {
             supabase.from('credit_card_expenses').select('*').eq('user_id', uid),
             supabase.from('accounts').select('*').eq('user_id', uid),
             supabase.from('user_tasks').select('*').eq('user_id', uid).order('deadline', { ascending: true }),
-            supabase.from('project_expenses').select('*').eq('user_id', uid).order('date', { ascending: false })
+            supabase.from('project_expenses').select('*').eq('user_id', uid).order('date', { ascending: false }),
+            supabase.from('financial_projects').select('*').eq('user_id', uid).order('created_at', { ascending: false })
           ]);
 
           setTransactions(financialTransactionsResponse.data || []);
@@ -256,6 +260,7 @@ const App: React.FC = () => {
           setAccounts(accountsResponse.data || []);
           setTasks(tasksResponse.data || []);
           setProjectExpenses(projectExpensesResponse.data || []);
+          setFinancialProjects(financialProjectsResponse.data || []);
 
           // Notificações de compromissos
           const hasNotifiedRef = (window as any)._hasNotifiedToday;
@@ -678,6 +683,14 @@ const App: React.FC = () => {
     await handleUpsert('accounts', account, fetchInitialData, id);
   };
 
+  const handleSaveFinancialProject = async (fp: Partial<FinancialProject>, id?: string) => {
+    await handleUpsert('financial_projects', fp, fetchInitialData, id);
+  };
+
+  const handleDeleteFinancialProject = async (id: string) => {
+    await handleDelete('financial_projects', id);
+  };
+
   const handleAddExpense = async (expense: Omit<ProjectExpense, 'id' | 'created_at'>) => {
     const uid = userIdRef.current;
     if (!uid) return;
@@ -784,6 +797,9 @@ const App: React.FC = () => {
                 projectExpenses={projectExpenses}
                 onAddExpense={handleAddExpense}
                 onDeleteExpense={handleDeleteExpense}
+                financialProjects={financialProjects}
+                onSaveFinancialProject={handleSaveFinancialProject}
+                onDeleteFinancialProject={handleDeleteFinancialProject}
               />
             </div>
           </div>
