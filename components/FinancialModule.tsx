@@ -23,7 +23,13 @@ import {
   CreditCard as CreditCardIcon,
   Layers,
   Landmark,
-  Loader2
+  Loader2,
+  Tag,
+  Wallet,
+  Target,
+  Pencil,
+  ChevronRight,
+  Info
 } from 'lucide-react';
 import {
   Project,
@@ -34,7 +40,9 @@ import {
   CreditCard,
   CreditCardExpense,
   Account,
-  AccountType
+  AccountType,
+  Category,
+  Budget
 } from '../types';
 import { formatDate } from '../utils';
 import {
@@ -71,6 +79,12 @@ interface FinancialModuleProps {
   accounts: Account[];
   onSaveFinancialProject: (fp: Partial<FinancialProject>, id?: string) => Promise<void>;
   onDeleteFinancialProject: (id: string) => void;
+  categories: Category[];
+  budgets: Budget[];
+  onSaveCategory: (cat: Partial<Category>, id?: string) => Promise<void>;
+  onDeleteCategory: (id: string) => void;
+  onSaveBudget: (b: Partial<Budget>, id?: string) => Promise<void>;
+  onDeleteBudget: (id: string) => void;
 }
 
 const formatCurrency = (value: any) => {
@@ -96,8 +110,30 @@ const FinancialModule: React.FC<FinancialModuleProps> = ({
   accounts,
   onSaveFinancialProject,
   onDeleteFinancialProject,
+  categories,
+  budgets,
+  onSaveCategory,
+  onDeleteCategory,
+  onSaveBudget,
+  onDeleteBudget,
 }) => {
-  const [activeTab, setActiveTab] = useState<'FLUXO' | 'PROJETOS' | 'CARTOES' | 'RELATORIOS' | 'DRE'>('FLUXO');
+  const [activeTab, setActiveTab] = useState<'FLUXO' | 'PROJETOS' | 'CARTOES' | 'RELATORIOS' | 'DRE' | 'ORCAMENTO'>('FLUXO');
+
+  // ── Orçamento / Categorias state ──────────────────────────────────────────
+  const [budgetMonth, setBudgetMonth] = useState<string>(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${(d.getMonth() + 1).toString().padStart(2, '0')}`;
+  });
+  const [showCategoryModal, setShowCategoryModal] = useState(false);
+  const [editingCategory, setEditingCategory] = useState<Category | null>(null);
+  const [categoryFormData, setCategoryFormData] = useState<{ name: string; type: 'Receita' | 'Despesa' | 'Ambos'; color: string }>({
+    name: '', type: 'Despesa', color: '#6366f1'
+  });
+  const [showBudgetModal, setShowBudgetModal] = useState(false);
+  const [budgetModalCategory, setBudgetModalCategory] = useState<Category | null>(null);
+  const [budgetFormAmount, setBudgetFormAmount] = useState('');
+  const [isSavingCategory, setIsSavingCategory] = useState(false);
+  const [isSavingBudget, setIsSavingBudget] = useState(false);
   const [balanceMode, setBalanceMode] = useState<'EFETIVADO' | 'PROJETADO'>('EFETIVADO');
   const [dreYear, setDreYear] = useState(new Date().getFullYear().toString());
   const [dreScope, setDreScope] = useState<'ALL' | 'Pessoal' | 'Empresa'>('Empresa');
@@ -442,17 +478,24 @@ const FinancialModule: React.FC<FinancialModuleProps> = ({
 
     transactions
       .filter(t => t.status === TransactionStatus.PAID)
+      // Exclui transferências internas (não são receita nem despesa real)
+      .filter(t =>
+        t.type !== TransactionType.TRANSFER &&
+        t.category !== 'Transferência Enviada' &&
+        t.category !== 'Transferência Recebida'
+      )
       .filter(t => {
-        const date = new Date(t.due_date);
-        return date.getFullYear().toString() === dreYear;
+        // Parsing timezone-safe: usa string diretamente para evitar desvio UTC
+        const year = (t.due_date || '').slice(0, 4);
+        return year === dreYear;
       })
       .filter(t => {
         if (dreScope === 'ALL') return true;
         return (t.scope || 'Empresa') === dreScope;
       })
       .forEach(t => {
-        const date = new Date(t.due_date);
-        const month = date.getMonth();
+        // Extrai mês diretamente da string (evita bug de fuso horário no dia 1º)
+        const month = parseInt((t.due_date || '').slice(5, 7), 10) - 1;
         const amount = parseFloat(String(t.amount)) || 0;
         const cat = t.category.toLowerCase();
 
@@ -504,6 +547,44 @@ const FinancialModule: React.FC<FinancialModuleProps> = ({
 
     return { overdue, dueSoon, hasReminders: overdue.length > 0 || dueSoon.length > 0 };
   }, [transactions]);
+
+  // ── Estatísticas de Orçamento por Categoria (Sistema dos Potes) ──────────
+  const budgetStats = useMemo(() => {
+    return categories.map(cat => {
+      const budget = budgets.find(b => b.category_id === cat.id && b.month === budgetMonth);
+      const monthTransactions = transactions.filter(t => {
+        const ym = (t.due_date || '').slice(0, 7);
+        return ym === budgetMonth && t.category === cat.name;
+      });
+
+      const spent = (cat.type === 'Despesa' || cat.type === 'Ambos')
+        ? monthTransactions.filter(t => t.type === TransactionType.EXPENSE)
+            .reduce((s, t) => s + (parseFloat(String(t.amount)) || 0), 0)
+        : 0;
+
+      const received = (cat.type === 'Receita' || cat.type === 'Ambos')
+        ? monthTransactions.filter(t => t.type === TransactionType.INCOME)
+            .reduce((s, t) => s + (parseFloat(String(t.amount)) || 0), 0)
+        : 0;
+
+      const limit = budget?.limit_amount || 0;
+      const used = cat.type === 'Receita' ? received : spent;
+      const percentage = limit > 0 ? Math.min((used / limit) * 100, 999) : 0;
+      const remaining = limit - used;
+
+      return { cat, budget, spent, received, used, limit, percentage, remaining };
+    });
+  }, [categories, budgets, transactions, budgetMonth]);
+
+  const budgetSummary = useMemo(() => {
+    const withBudget = budgetStats.filter(s => s.limit > 0);
+    const totalLimit = withBudget.reduce((sum, s) => sum + s.limit, 0);
+    const totalUsed = withBudget.reduce((sum, s) => sum + s.used, 0);
+    const totalRemaining = totalLimit - totalUsed;
+    const overBudget = withBudget.filter(s => s.percentage > 100).length;
+    const nearLimit = withBudget.filter(s => s.percentage >= 75 && s.percentage <= 100).length;
+    return { totalLimit, totalUsed, totalRemaining, overBudget, nearLimit, count: withBudget.length };
+  }, [budgetStats]);
 
   const handleEditTransaction = (transaction: FinancialTransaction) => {
     setEditingTransaction(transaction);
@@ -803,6 +884,106 @@ const FinancialModule: React.FC<FinancialModuleProps> = ({
   }, [financialProjects, transactions]);
 
 
+  // ── Handlers: Categorias ─────────────────────────────────────────────────
+  const handleOpenNewCategory = () => {
+    setEditingCategory(null);
+    setCategoryFormData({ name: '', type: 'Despesa', color: '#6366f1' });
+    setShowCategoryModal(true);
+  };
+
+  const handleEditCategory = (cat: Category) => {
+    setEditingCategory(cat);
+    setCategoryFormData({ name: cat.name, type: cat.type, color: cat.color });
+    setShowCategoryModal(true);
+  };
+
+  const handleDeleteCategory = (id: string) => {
+    if (window.confirm('Excluir esta categoria? Os lançamentos vinculados manterão o nome da categoria, mas não serão mais reconhecidos.')) {
+      onDeleteCategory(id);
+    }
+  };
+
+  const handleSaveCategory = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!categoryFormData.name.trim()) return;
+    setIsSavingCategory(true);
+    try {
+      await onSaveCategory(
+        { ...(editingCategory && { id: editingCategory.id }), name: categoryFormData.name.trim(), type: categoryFormData.type, color: categoryFormData.color },
+        editingCategory?.id
+      );
+      setShowCategoryModal(false);
+      setEditingCategory(null);
+    } catch (err) { console.error(err); }
+    finally { setIsSavingCategory(false); }
+  };
+
+  const handleSeedDefaultCategories = async () => {
+    const defaults: Array<{ name: string; type: 'Receita' | 'Despesa' | 'Ambos'; color: string }> = [
+      { name: 'Alimentação',   type: 'Despesa',  color: '#f97316' },
+      { name: 'Moradia',       type: 'Despesa',  color: '#3b82f6' },
+      { name: 'Transporte',    type: 'Despesa',  color: '#8b5cf6' },
+      { name: 'Saúde',         type: 'Despesa',  color: '#ef4444' },
+      { name: 'Educação',      type: 'Despesa',  color: '#14b8a6' },
+      { name: 'Lazer',         type: 'Despesa',  color: '#ec4899' },
+      { name: 'Vestuário',     type: 'Despesa',  color: '#f59e0b' },
+      { name: 'Assinaturas',   type: 'Despesa',  color: '#64748b' },
+      { name: 'Impostos',      type: 'Despesa',  color: '#475569' },
+      { name: 'Investimentos', type: 'Ambos',    color: '#a855f7' },
+      { name: 'Serviços',      type: 'Receita',  color: '#22c55e' },
+      { name: 'Salário',       type: 'Receita',  color: '#10b981' },
+      { name: 'Freelance',     type: 'Receita',  color: '#06b6d4' },
+      { name: 'Outros',        type: 'Ambos',    color: '#94a3b8' },
+    ];
+    const existingNames = categories.map(c => c.name.toLowerCase());
+    const toCreate = defaults.filter(d => !existingNames.includes(d.name.toLowerCase()));
+    if (toCreate.length === 0) { alert('Todas as categorias padrão já existem.'); return; }
+    setIsSavingCategory(true);
+    try {
+      // Envia como array para o handleUpsert fazer inserção em lote (um único fetchInitialData)
+      await (onSaveCategory as any)(toCreate);
+    } catch (err: any) {
+      console.error('Erro ao criar categorias padrão:', err);
+      alert('Erro ao criar categorias. Verifique se o SQL de migração foi executado no Supabase:\nsupabase/migrations/20260412_add_categories_and_budgets.sql');
+    } finally {
+      setIsSavingCategory(false);
+    }
+  };
+
+  // ── Handlers: Orçamento (Potes) ──────────────────────────────────────────
+  const handleOpenBudgetModal = (cat: Category) => {
+    setBudgetModalCategory(cat);
+    const existing = budgets.find(b => b.category_id === cat.id && b.month === budgetMonth);
+    setBudgetFormAmount(existing ? String(existing.limit_amount) : '');
+    setShowBudgetModal(true);
+  };
+
+  const handleSaveBudget = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!budgetModalCategory) return;
+    const amount = parseFloat(budgetFormAmount);
+    if (isNaN(amount) || amount < 0) { alert('Insira um valor válido.'); return; }
+    setIsSavingBudget(true);
+    try {
+      const existing = budgets.find(b => b.category_id === budgetModalCategory.id && b.month === budgetMonth);
+      await onSaveBudget(
+        { ...(existing && { id: existing.id }), category_id: budgetModalCategory.id, month: budgetMonth, limit_amount: amount },
+        existing?.id
+      );
+      setShowBudgetModal(false);
+      setBudgetModalCategory(null);
+    } catch (err) { console.error(err); }
+    finally { setIsSavingBudget(false); }
+  };
+
+  const handleDeleteBudgetForCategory = (cat: Category) => {
+    const existing = budgets.find(b => b.category_id === cat.id && b.month === budgetMonth);
+    if (!existing) return;
+    if (window.confirm(`Remover o limite de orçamento da categoria "${cat.name}" para este mês?`)) {
+      onDeleteBudget(existing.id);
+    }
+  };
+
   const handleGenerateReport = () => {
     const filtered = transactions.filter(t => {
       const matchesDateRange = (!reportStartDate || new Date(t.due_date) >= new Date(reportStartDate)) &&
@@ -859,6 +1040,12 @@ const FinancialModule: React.FC<FinancialModuleProps> = ({
               className={`px-3 sm:px-4 py-1.5 rounded-lg text-[10px] sm:text-xs font-bold transition-all ${activeTab === 'DRE' ? 'bg-white text-primary shadow-sm border border-slate-200/40' : 'text-slate-500 hover:text-slate-700'}`}
             >
               DRE
+            </button>
+            <button
+              onClick={() => setActiveTab('ORCAMENTO')}
+              className={`px-3 sm:px-4 py-1.5 rounded-lg text-[10px] sm:text-xs font-bold transition-all flex items-center gap-1.5 ${activeTab === 'ORCAMENTO' ? 'bg-white text-primary shadow-sm border border-slate-200/40' : 'text-slate-500 hover:text-slate-700'}`}
+            >
+              <Wallet size={12} /> Orçamento
             </button>
           </div>
           <div className="flex flex-wrap bg-slate-100/50 p-1 rounded-xl border border-slate-200/60">
@@ -1894,6 +2081,279 @@ const FinancialModule: React.FC<FinancialModuleProps> = ({
         )
       }
 
+      {/* ── ORÇAMENTO (Sistema dos Potes) ─────────────────────────────────── */}
+      {activeTab === 'ORCAMENTO' && (
+        <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+
+          {/* ── CATEGORIAS ─────────────────────────────────────────────────── */}
+          <div className="bg-white rounded-2xl border border-slate-200/60 shadow-sm overflow-hidden">
+            <div className="p-5 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 bg-violet-50 text-violet-600 rounded-xl flex items-center justify-center">
+                  <Tag size={18} />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black text-slate-800">Categorias</h3>
+                  <p className="text-[10px] text-slate-400 font-medium">Gerencie as categorias de receitas e despesas</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                {categories.length === 0 && (
+                  <button
+                    onClick={handleSeedDefaultCategories}
+                    disabled={isSavingCategory}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 text-slate-600 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-200 transition-all disabled:opacity-50"
+                  >
+                    {isSavingCategory ? <Loader2 size={12} className="animate-spin" /> : <ChevronRight size={12} />}
+                    {isSavingCategory ? 'Criando...' : 'Adicionar Padrões'}
+                  </button>
+                )}
+                <button
+                  onClick={handleOpenNewCategory}
+                  className="flex items-center gap-1.5 px-4 py-2 bg-violet-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-violet-700 shadow-md shadow-violet-200/50 transition-all"
+                >
+                  <Plus size={14} /> Nova Categoria
+                </button>
+              </div>
+            </div>
+
+            {categories.length === 0 ? (
+              <div className="p-10 text-center">
+                <div className="w-14 h-14 bg-slate-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                  <Tag size={24} className="text-slate-300" />
+                </div>
+                <p className="text-sm font-bold text-slate-500">Nenhuma categoria criada</p>
+                <p className="text-[11px] text-slate-400 mt-1">Crie categorias para organizar seus lançamentos e configurar o orçamento por potes.</p>
+                <button
+                  onClick={handleSeedDefaultCategories}
+                  disabled={isSavingCategory}
+                  className="mt-4 inline-flex items-center gap-2 px-5 py-2.5 bg-violet-600 text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-violet-700 transition-all shadow-md shadow-violet-200 disabled:opacity-60"
+                >
+                  {isSavingCategory
+                    ? <><Loader2 size={14} className="animate-spin" /> Criando categorias...</>
+                    : <><Plus size={14} /> Criar categorias padrão</>
+                  }
+                </button>
+              </div>
+            ) : (
+              <div className="p-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                {categories.map(cat => (
+                  <div
+                    key={cat.id}
+                    className="flex items-center justify-between p-3.5 rounded-xl border border-slate-100 bg-slate-50/50 hover:bg-white hover:border-slate-200 hover:shadow-sm transition-all group"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-8 h-8 rounded-lg shrink-0 flex items-center justify-center" style={{ backgroundColor: cat.color + '22' }}>
+                        <div className="w-3 h-3 rounded-full" style={{ backgroundColor: cat.color }}></div>
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-sm font-bold text-slate-800 truncate">{cat.name}</p>
+                        <span className={`text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded-md ${
+                          cat.type === 'Receita' ? 'bg-emerald-50 text-emerald-600'
+                          : cat.type === 'Despesa' ? 'bg-rose-50 text-rose-600'
+                          : 'bg-violet-50 text-violet-600'
+                        }`}>
+                          {cat.type}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button
+                        onClick={() => handleEditCategory(cat)}
+                        className="p-1.5 text-slate-400 hover:text-blue-500 rounded-lg transition-colors"
+                        title="Editar"
+                      >
+                        <Pencil size={13} />
+                      </button>
+                      <button
+                        onClick={() => handleDeleteCategory(cat.id)}
+                        className="p-1.5 text-slate-400 hover:text-rose-500 rounded-lg transition-colors"
+                        title="Excluir"
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* ── MEUS POTES (Budget System) ─────────────────────────────────── */}
+          <div className="space-y-5">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 bg-amber-50 text-amber-600 rounded-xl flex items-center justify-center">
+                  <Wallet size={18} />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black text-slate-800">Meus Potes</h3>
+                  <p className="text-[10px] text-slate-400 font-medium">Orçamento mensal por categoria</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Mês</label>
+                <input
+                  type="month"
+                  value={budgetMonth}
+                  onChange={e => setBudgetMonth(e.target.value)}
+                  className="p-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/20"
+                />
+              </div>
+            </div>
+
+            {/* Summary row */}
+            {budgetSummary.count > 0 && (
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div className="bg-white p-4 rounded-2xl border border-slate-200/60 shadow-sm">
+                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Orçamento Total</p>
+                  <p className="text-lg font-black text-slate-800 mt-1">{formatCurrency(budgetSummary.totalLimit)}</p>
+                </div>
+                <div className="bg-white p-4 rounded-2xl border border-slate-200/60 shadow-sm">
+                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Utilizado</p>
+                  <p className={`text-lg font-black mt-1 ${budgetSummary.totalUsed > budgetSummary.totalLimit ? 'text-rose-600' : 'text-slate-800'}`}>
+                    {formatCurrency(budgetSummary.totalUsed)}
+                  </p>
+                </div>
+                <div className="bg-white p-4 rounded-2xl border border-slate-200/60 shadow-sm">
+                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Disponível</p>
+                  <p className={`text-lg font-black mt-1 ${budgetSummary.totalRemaining < 0 ? 'text-rose-600' : 'text-emerald-600'}`}>
+                    {formatCurrency(budgetSummary.totalRemaining)}
+                  </p>
+                </div>
+                <div className="bg-white p-4 rounded-2xl border border-slate-200/60 shadow-sm">
+                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Alertas</p>
+                  <p className="text-lg font-black text-rose-500 mt-1">{budgetSummary.overBudget} acima</p>
+                  <p className="text-[10px] text-amber-500 font-bold">{budgetSummary.nearLimit} próx. limite</p>
+                </div>
+              </div>
+            )}
+
+            {categories.length === 0 ? (
+              <div className="bg-white rounded-2xl border border-dashed border-slate-200 p-10 text-center">
+                <Wallet size={32} className="text-slate-300 mx-auto mb-3" />
+                <p className="text-sm font-bold text-slate-500">Crie categorias primeiro</p>
+                <p className="text-[11px] text-slate-400 mt-1">Para usar os potes, crie suas categorias na seção acima.</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {budgetStats.map(({ cat, budget, used, limit, percentage, remaining }) => {
+                  const hasLimit = limit > 0;
+                  const isOverBudget = hasLimit && percentage > 100;
+                  const isNearLimit = hasLimit && percentage >= 75 && !isOverBudget;
+                  const barColor = isOverBudget ? '#ef4444' : isNearLimit ? '#f59e0b' : cat.color;
+                  const barWidth = hasLimit ? Math.min(percentage, 100) : 0;
+
+                  return (
+                    <div
+                      key={cat.id}
+                      className={`bg-white rounded-2xl border shadow-sm p-5 flex flex-col gap-4 transition-all hover:shadow-md ${
+                        isOverBudget ? 'border-rose-200 bg-rose-50/30' : isNearLimit ? 'border-amber-200 bg-amber-50/20' : 'border-slate-200/60'
+                      }`}
+                    >
+                      {/* Header */}
+                      <div className="flex items-start justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: cat.color + '22' }}>
+                            <Wallet size={16} style={{ color: cat.color }} />
+                          </div>
+                          <div>
+                            <p className="text-sm font-black text-slate-800">{cat.name}</p>
+                            <span className={`text-[9px] font-black uppercase tracking-widest ${
+                              cat.type === 'Receita' ? 'text-emerald-500'
+                              : cat.type === 'Despesa' ? 'text-rose-500'
+                              : 'text-violet-500'
+                            }`}>{cat.type}</span>
+                          </div>
+                        </div>
+                        {isOverBudget && (
+                          <div className="flex items-center gap-1 bg-rose-100 text-rose-600 px-2 py-1 rounded-lg">
+                            <AlertCircle size={10} />
+                            <span className="text-[9px] font-black uppercase">Excedido</span>
+                          </div>
+                        )}
+                        {isNearLimit && (
+                          <div className="flex items-center gap-1 bg-amber-100 text-amber-600 px-2 py-1 rounded-lg">
+                            <Info size={10} />
+                            <span className="text-[9px] font-black uppercase">Atenção</span>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Amounts */}
+                      {hasLimit ? (
+                        <>
+                          <div className="space-y-2">
+                            <div className="flex justify-between text-xs">
+                              <span className="text-slate-500 font-medium">Utilizado</span>
+                              <span className={`font-black ${isOverBudget ? 'text-rose-600' : 'text-slate-800'}`}>{formatCurrency(used)}</span>
+                            </div>
+                            <div className="w-full bg-slate-100 rounded-full h-2.5 overflow-hidden">
+                              <div
+                                className="h-full rounded-full transition-all duration-700"
+                                style={{ width: `${barWidth}%`, backgroundColor: barColor }}
+                              ></div>
+                            </div>
+                            <div className="flex justify-between items-center">
+                              <span className="text-[10px] text-slate-400 font-medium">
+                                {percentage.toFixed(0)}% de {formatCurrency(limit)}
+                              </span>
+                              <span className={`text-[10px] font-black ${remaining < 0 ? 'text-rose-600' : 'text-emerald-600'}`}>
+                                {remaining < 0 ? `+${formatCurrency(Math.abs(remaining))} excedido` : `${formatCurrency(remaining)} restante`}
+                              </span>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2 pt-1 border-t border-slate-100">
+                            <button
+                              onClick={() => handleOpenBudgetModal(cat)}
+                              className="flex-1 flex items-center justify-center gap-1.5 py-1.5 text-[9px] font-black uppercase tracking-widest text-primary hover:bg-primary/5 rounded-lg transition-all"
+                            >
+                              <Target size={10} /> Ajustar Limite
+                            </button>
+                            <button
+                              onClick={() => handleDeleteBudgetForCategory(cat)}
+                              className="flex items-center justify-center gap-1 py-1.5 px-2.5 text-[9px] font-black uppercase text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-all"
+                            >
+                              <Trash2 size={10} />
+                            </button>
+                          </div>
+                        </>
+                      ) : (
+                        <div className="flex flex-col gap-2">
+                          <div className="flex justify-between text-xs">
+                            <span className="text-slate-400 font-medium">Sem limite definido</span>
+                            <span className="font-bold text-slate-600">{formatCurrency(used)} gasto</span>
+                          </div>
+                          <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
+                            <div className="h-full w-full bg-slate-200 rounded-full"></div>
+                          </div>
+                          <button
+                            onClick={() => handleOpenBudgetModal(cat)}
+                            className="w-full flex items-center justify-center gap-1.5 py-2 bg-slate-50 hover:bg-primary/5 border border-dashed border-slate-200 hover:border-primary/30 text-primary rounded-xl text-[9px] font-black uppercase tracking-widest transition-all"
+                          >
+                            <Target size={11} /> Definir Orçamento
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Info card */}
+            <div className="p-4 bg-blue-50 border border-blue-100 rounded-2xl flex items-start gap-3">
+              <Info size={16} className="text-blue-500 shrink-0 mt-0.5" />
+              <p className="text-[11px] text-blue-700 font-medium leading-relaxed">
+                O <strong>Sistema dos Potes</strong> funciona como envelopes mensais: defina um limite para cada categoria e acompanhe
+                quanto já foi gasto. Quando um pote atinge <strong>75%</strong>, você recebe um aviso de atenção.
+                Ao ultrapassar <strong>100%</strong>, o pote fica em vermelho. Os valores são calculados com base nos lançamentos
+                efetivados e pendentes no mês selecionado.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modal: escolha de escopo para edição de parcelas */}
       {showInstallmentChoice && editingTransaction && (
@@ -1964,6 +2424,48 @@ const FinancialModule: React.FC<FinancialModuleProps> = ({
                 </div>
 
                 <input required type="text" className="w-full p-3 bg-slate-50 border border-slate-100 rounded-xl" value={formData.description} onChange={e => setFormData({ ...formData, description: e.target.value })} placeholder="Descrição" />
+
+                {/* Categoria */}
+                <div>
+                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1 flex items-center gap-1.5">
+                    <Tag size={10} /> Categoria
+                  </label>
+                  {categories.filter(c =>
+                    formData.type === TransactionType.INCOME
+                      ? c.type === 'Receita' || c.type === 'Ambos'
+                      : formData.type === TransactionType.EXPENSE
+                        ? c.type === 'Despesa' || c.type === 'Ambos'
+                        : true
+                  ).length > 0 ? (
+                    <select
+                      className="w-full p-3 bg-slate-50 border border-slate-100 rounded-xl outline-none"
+                      value={formData.category}
+                      onChange={e => setFormData({ ...formData, category: e.target.value })}
+                    >
+                      <option value="">Selecione uma categoria</option>
+                      {categories
+                        .filter(c =>
+                          formData.type === TransactionType.INCOME
+                            ? c.type === 'Receita' || c.type === 'Ambos'
+                            : formData.type === TransactionType.EXPENSE
+                              ? c.type === 'Despesa' || c.type === 'Ambos'
+                              : true
+                        )
+                        .map(c => (
+                          <option key={c.id} value={c.name}>{c.name}</option>
+                        ))}
+                    </select>
+                  ) : (
+                    <input
+                      type="text"
+                      className="w-full p-3 bg-slate-50 border border-slate-100 rounded-xl"
+                      value={formData.category}
+                      onChange={e => setFormData({ ...formData, category: e.target.value })}
+                      placeholder="Ex: Alimentação, Salário..."
+                    />
+                  )}
+                </div>
+
                 <div className="grid grid-cols-2 gap-4">
                   <input required type="number" step="0.01" className="w-full p-3 bg-slate-50 border border-slate-100 rounded-xl" value={formData.amount} onChange={e => setFormData({ ...formData, amount: e.target.value })} placeholder="Valor" />
                   <input required type="date" className="w-full p-3 bg-slate-50 border border-slate-100 rounded-xl" value={formData.due_date} onChange={e => setFormData({ ...formData, due_date: e.target.value })} />
@@ -2485,6 +2987,159 @@ const FinancialModule: React.FC<FinancialModuleProps> = ({
                 >
                   {isSaving && <Loader2 size={16} className="animate-spin" />}
                   Salvar Conta
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── Modal: Nova / Editar Categoria ─────────────────────────────────── */}
+      {showCategoryModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl w-full max-w-sm shadow-2xl overflow-hidden animate-in zoom-in duration-300">
+            <div className="p-5 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+              <h3 className="text-sm font-black text-slate-800">{editingCategory ? 'Editar Categoria' : 'Nova Categoria'}</h3>
+              <button onClick={() => { setShowCategoryModal(false); setEditingCategory(null); }} className="p-2 text-slate-400 hover:text-rose-500 rounded-full transition-all">
+                <X size={18} />
+              </button>
+            </div>
+            <form onSubmit={handleSaveCategory} className="p-6 space-y-4">
+              <div>
+                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Nome *</label>
+                <input
+                  required
+                  type="text"
+                  className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-violet-400"
+                  placeholder="Ex: Alimentação, Salário..."
+                  value={categoryFormData.name}
+                  onChange={e => setCategoryFormData({ ...categoryFormData, name: e.target.value })}
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Tipo *</label>
+                <div className="flex gap-2 p-1 bg-slate-100 rounded-xl">
+                  {(['Despesa', 'Receita', 'Ambos'] as const).map(t => (
+                    <button
+                      key={t}
+                      type="button"
+                      onClick={() => setCategoryFormData({ ...categoryFormData, type: t })}
+                      className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase transition-all ${
+                        categoryFormData.type === t
+                          ? t === 'Despesa' ? 'bg-rose-500 text-white shadow-sm'
+                            : t === 'Receita' ? 'bg-emerald-500 text-white shadow-sm'
+                            : 'bg-violet-500 text-white shadow-sm'
+                          : 'text-slate-500 hover:text-slate-700'
+                      }`}
+                    >
+                      {t}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Cor</label>
+                <div className="flex items-center gap-3">
+                  <input
+                    type="color"
+                    className="w-10 h-10 rounded-xl border border-slate-200 cursor-pointer p-1 bg-slate-50"
+                    value={categoryFormData.color}
+                    onChange={e => setCategoryFormData({ ...categoryFormData, color: e.target.value })}
+                  />
+                  <div className="flex flex-wrap gap-2">
+                    {['#f97316','#3b82f6','#8b5cf6','#ef4444','#14b8a6','#ec4899','#f59e0b','#22c55e','#06b6d4','#64748b'].map(c => (
+                      <button
+                        key={c}
+                        type="button"
+                        onClick={() => setCategoryFormData({ ...categoryFormData, color: c })}
+                        className="w-6 h-6 rounded-full border-2 transition-all hover:scale-110"
+                        style={{ backgroundColor: c, borderColor: categoryFormData.color === c ? '#1e293b' : 'transparent' }}
+                      />
+                    ))}
+                  </div>
+                </div>
+              </div>
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => { setShowCategoryModal(false); setEditingCategory(null); }}
+                  className="flex-1 py-2.5 border border-slate-200 text-slate-600 rounded-xl font-bold text-sm"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSavingCategory}
+                  className="flex-1 py-2.5 bg-violet-600 text-white rounded-xl font-black uppercase tracking-widest hover:bg-violet-700 shadow-md shadow-violet-200 disabled:opacity-50 flex items-center justify-center gap-2 text-xs"
+                >
+                  {isSavingCategory ? <><Loader2 size={14} className="animate-spin" /> Salvando...</> : (editingCategory ? 'Salvar' : 'Criar')}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── Modal: Definir Orçamento do Pote ───────────────────────────────── */}
+      {showBudgetModal && budgetModalCategory && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl w-full max-w-sm shadow-2xl overflow-hidden animate-in zoom-in duration-300">
+            <div className="p-5 border-b border-slate-100 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ backgroundColor: budgetModalCategory.color + '22' }}>
+                  <Wallet size={16} style={{ color: budgetModalCategory.color }} />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black text-slate-800">{budgetModalCategory.name}</h3>
+                  <p className="text-[10px] text-slate-400 font-medium">
+                    Limite para {new Date(budgetMonth + '-01').toLocaleString('pt-BR', { month: 'long', year: 'numeric' })}
+                  </p>
+                </div>
+              </div>
+              <button onClick={() => { setShowBudgetModal(false); setBudgetModalCategory(null); }} className="p-2 text-slate-400 hover:text-rose-500 rounded-full transition-all">
+                <X size={18} />
+              </button>
+            </div>
+            <form onSubmit={handleSaveBudget} className="p-6 space-y-5">
+              <div>
+                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">
+                  <Target size={10} className="inline mr-1" />
+                  {budgetModalCategory.type === 'Receita' ? 'Meta de Receita (R$)' : 'Limite de Gasto (R$)'}
+                </label>
+                <div className="relative">
+                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 font-black text-sm">R$</span>
+                  <input
+                    required
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-primary text-lg font-black text-slate-800"
+                    placeholder="0,00"
+                    value={budgetFormAmount}
+                    onChange={e => setBudgetFormAmount(e.target.value)}
+                    autoFocus
+                  />
+                </div>
+                <p className="text-[10px] text-slate-400 mt-1.5 ml-1">
+                  {budgetModalCategory.type === 'Receita'
+                    ? 'Define a meta de receita que deseja atingir nesta categoria.'
+                    : 'Define o valor máximo que pode ser gasto nesta categoria no mês.'}
+                </p>
+              </div>
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => { setShowBudgetModal(false); setBudgetModalCategory(null); }}
+                  className="flex-1 py-2.5 border border-slate-200 text-slate-600 rounded-xl font-bold text-sm"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSavingBudget}
+                  className="flex-1 py-2.5 bg-primary text-white rounded-xl font-black uppercase tracking-widest hover:bg-primary-dark shadow-md shadow-primary/20 disabled:opacity-50 flex items-center justify-center gap-2 text-xs"
+                >
+                  {isSavingBudget ? <><Loader2 size={14} className="animate-spin" /> Salvando...</> : 'Definir Limite'}
                 </button>
               </div>
             </form>

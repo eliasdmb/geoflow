@@ -297,4 +297,22 @@ export interface ProjectExpense {
   created_at: string;
 }
 
+export interface Category {
+  id: string;
+  user_id: string;
+  name: string;
+  type: 'Receita' | 'Despesa' | 'Ambos';
+  color: string;
+  created_at: string;
+}
+
+export interface Budget {
+  id: string;
+  user_id: string;
+  category_id: string;
+  month: string; // formato YYYY-MM
+  limit_amount: number;
+  created_at: string;
+}
+
 export type ViewState = 'DASHBOARD' | 'PROJECTS' | 'CLIENTS' | 'PROPERTIES' | 'PROFESSIONALS' | 'REGISTRIES' | 'SIGEF_CERTIFICATIONS' | 'SERVICES' | 'BUDGET_TEMPLATES' | 'PROJECT_DETAILS' | 'FINANCIAL' | 'CALENDAR' | 'FINANCIAL_REPORT';

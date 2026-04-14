@@ -1,6 +1,6 @@
 // components/AppRouter.tsx
 import React from 'react';
-import { ViewState, Project, Client, RuralProperty, Professional, Service, Registry, SigefCertification, BudgetItemTemplate, FinancialTransaction, FinancialProject, Appointment, CreditCard, CreditCardExpense, ProjectStatus, Account, WorkflowStepId, UserTask, ProjectExpense } from '../types';
+import { ViewState, Project, Client, RuralProperty, Professional, Service, Registry, SigefCertification, BudgetItemTemplate, FinancialTransaction, FinancialProject, Appointment, CreditCard, CreditCardExpense, ProjectStatus, Account, WorkflowStepId, UserTask, ProjectExpense, Category, Budget } from '../types';
 import { WORKFLOW_STEPS_DEFINITION, CAR_WORKFLOW_STEPS_DEFINITION } from '../constants';
 import { supabase } from '../lib/supabase';
 import Dashboard from './Dashboard';
@@ -68,6 +68,12 @@ interface AppRouterProps {
   financialProjects: FinancialProject[];
   onSaveFinancialProject: (fp: Partial<FinancialProject>, id?: string) => Promise<void>;
   onDeleteFinancialProject: (id: string) => Promise<void>;
+  categories: Category[];
+  budgets: Budget[];
+  onSaveCategory: (cat: Partial<Category>, id?: string) => Promise<void>;
+  onDeleteCategory: (id: string) => Promise<void>;
+  onSaveBudget: (b: Partial<Budget>, id?: string) => Promise<void>;
+  onDeleteBudget: (id: string) => Promise<void>;
 }
 
 const AppRouter: React.FC<AppRouterProps> = ({
@@ -107,6 +113,12 @@ const AppRouter: React.FC<AppRouterProps> = ({
   financialProjects,
   onSaveFinancialProject,
   onDeleteFinancialProject,
+  categories,
+  budgets,
+  onSaveCategory,
+  onDeleteCategory,
+  onSaveBudget,
+  onDeleteBudget,
 }) => {
   const currentProject = projects.find(p => p.id === selectedProjectId);
 
@@ -139,6 +151,12 @@ const AppRouter: React.FC<AppRouterProps> = ({
           onDeleteAccount={(id) => handleDelete('accounts', id)}
           onSaveFinancialProject={onSaveFinancialProject}
           onDeleteFinancialProject={onDeleteFinancialProject}
+          categories={categories}
+          budgets={budgets}
+          onSaveCategory={onSaveCategory}
+          onDeleteCategory={onDeleteCategory}
+          onSaveBudget={onSaveBudget}
+          onDeleteBudget={onDeleteBudget}
         />
       </ProtectedRoute>;
       case 'PROJECT_DETAILS': {

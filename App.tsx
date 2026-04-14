@@ -45,7 +45,9 @@ import {
   Account,
   TransactionType,
   UserTask,
-  ProjectExpense
+  ProjectExpense,
+  Category,
+  Budget
 } from './types';
 import { WORKFLOW_STEPS_DEFINITION, CAR_WORKFLOW_STEPS_DEFINITION } from './constants';
 import { supabase, checkSupabaseConnection } from './lib/supabase';
@@ -137,6 +139,8 @@ const App: React.FC = () => {
   const [tasks, setTasks] = useState<UserTask[]>([]);
   const [projectExpenses, setProjectExpenses] = useState<ProjectExpense[]>([]);
   const [financialProjects, setFinancialProjects] = useState<FinancialProject[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [budgets, setBudgets] = useState<Budget[]>([]);
 
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   // Initialize sidebar based on window width if available, otherwise default to true (desktop)
@@ -228,7 +232,9 @@ const App: React.FC = () => {
             accountsResponse,
             tasksResponse,
             projectExpensesResponse,
-            financialProjectsResponse
+            financialProjectsResponse,
+            categoriesResponse,
+            budgetsResponse
           ] = await Promise.all([
             supabase.from('financial_transactions').select('*').eq('user_id', uid).order('due_date', { ascending: false }),
             supabase.from('properties').select('*').eq('user_id', uid),
@@ -243,7 +249,9 @@ const App: React.FC = () => {
             supabase.from('accounts').select('*').eq('user_id', uid),
             supabase.from('user_tasks').select('*').eq('user_id', uid).order('deadline', { ascending: true }),
             supabase.from('project_expenses').select('*').eq('user_id', uid).order('date', { ascending: false }),
-            supabase.from('financial_projects').select('*').eq('user_id', uid).order('created_at', { ascending: false })
+            supabase.from('financial_projects').select('*').eq('user_id', uid).order('created_at', { ascending: false }),
+            supabase.from('categories').select('*').eq('user_id', uid).order('name'),
+            supabase.from('budgets').select('*').eq('user_id', uid).order('month', { ascending: false })
           ]);
 
           setTransactions(financialTransactionsResponse.data || []);
@@ -261,6 +269,8 @@ const App: React.FC = () => {
           setTasks(tasksResponse.data || []);
           setProjectExpenses(projectExpensesResponse.data || []);
           setFinancialProjects(financialProjectsResponse.data || []);
+          setCategories(categoriesResponse.data || []);
+          setBudgets(budgetsResponse.data || []);
 
           // Notificações de compromissos
           const hasNotifiedRef = (window as any)._hasNotifiedToday;
@@ -691,6 +701,22 @@ const App: React.FC = () => {
     await handleDelete('financial_projects', id);
   };
 
+  const handleSaveCategory = async (cat: Partial<Category>, id?: string) => {
+    await handleUpsert('categories', cat, fetchInitialData, id);
+  };
+
+  const handleDeleteCategory = async (id: string) => {
+    await handleDelete('categories', id);
+  };
+
+  const handleSaveBudget = async (b: Partial<Budget>, id?: string) => {
+    await handleUpsert('budgets', b, fetchInitialData, id);
+  };
+
+  const handleDeleteBudget = async (id: string) => {
+    await handleDelete('budgets', id);
+  };
+
   const handleAddExpense = async (expense: Omit<ProjectExpense, 'id' | 'created_at'>) => {
     const uid = userIdRef.current;
     if (!uid) return;
@@ -800,6 +826,12 @@ const App: React.FC = () => {
                 financialProjects={financialProjects}
                 onSaveFinancialProject={handleSaveFinancialProject}
                 onDeleteFinancialProject={handleDeleteFinancialProject}
+                categories={categories}
+                budgets={budgets}
+                onSaveCategory={handleSaveCategory}
+                onDeleteCategory={handleDeleteCategory}
+                onSaveBudget={handleSaveBudget}
+                onDeleteBudget={handleDeleteBudget}
               />
             </div>
           </div>
