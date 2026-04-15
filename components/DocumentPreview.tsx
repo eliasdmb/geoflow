@@ -599,26 +599,36 @@ ${registryMunicipality} - GO, ${today}.`;
 
       case 'Requerimento para o Cartório': {
         const allOwners2 = [client, ...additionalOwners];
-        const getAddr = (o: Client) => typeof o.address === 'string' ? o.address : `${(o.address as any)?.street || ''}, ${(o.address as any)?.number || 'S/N'}, ${(o.address as any)?.city || ''}`;
+        const getAddr = (o: Client) => {
+          if (typeof o.address === 'string') return o.address || '__________';
+          const addr = o.address as any;
+          return [addr?.street, addr?.number || 'S/N', addr?.city].filter(Boolean).join(', ') || '__________';
+        };
 
         if (selectedRegistry?.cns === '02.612-0') {
           const certNumber = selectedCertification?.cert_number || project.certification_number || '______________';
           const signersText = allOwners2.map(o =>
             `${o.name.toUpperCase()}, ${(o as any).nationality || 'brasileiro'}, ${(o as any).marital_status || 'casado'}, ${(o as any).profession || 'agropecuarista'}, portador do CPF nº. ${o.cpf_cnpj}, residente e domiciliado em ${getAddr(o)}`
           ).join('; ');
-          return `Ilustríssimo Sr. Oficial do Registro de Imóveis da Comarca de Rio Verde, Estado de Goiás.
-
-${signersText}, proprietário(s) do imóvel rural denominado ${property.name.toUpperCase()}, localizado no município de Rio Verde/GO, devidamente inscrito no Serviço de Registro de Imóveis da comarca de Rio Verde/GO, sob a matrícula nº ${property.registration_number}, cadastrado no INCRA sob o nº ${property.incra_code || '________________'}, abaixo assinado(s), vem perante V. Sra., requerer a averbação do Georreferenciamento do referido imóvel acima descrito, conforme certificação no SIGEF/INCRA nº ${certNumber}, com a área de ${property.area_ha} ha de minha propriedade e declarar, sob pena de responsabilidade civil e criminal, que não houve alteração das divisas existentes dos imóveis confinantes especificados nas Plantas e memoriais descritivos em anexo e que foram respeitados os direitos dos confrontantes, conforme § 14 do artigo 213, da lei nº 6.015/73.`;
+          return `Eu, ${signersText}, proprietário(s) do imóvel rural denominado ${property.name.toUpperCase()}, localizado no município de Rio Verde/GO, devidamente inscrito no Serviço de Registro de Imóveis da comarca de Rio Verde/GO, sob a matrícula nº ${property.registration_number}, cadastrado no INCRA sob o nº ${property.incra_code || '________________'}, abaixo assinado(s), vem perante V. Sra., requerer a averbação do Georreferenciamento do referido imóvel acima descrito, conforme certificação no SIGEF/INCRA nº ${certNumber}, com a área de ${property.area_ha} ha de minha propriedade e declarar, sob pena de responsabilidade civil e criminal, que não houve alteração das divisas existentes dos imóveis confinantes especificados nas Plantas e memoriais descritivos em anexo e que foram respeitados os direitos dos confrontantes, conforme § 14 do artigo 213, da lei nº 6.015/73.`;
         }
 
         if (selectedRegistry?.cns === '02.648-4') {
-          const signersText2 = allOwners2.map(o =>
-            `${o.name.toUpperCase()}, Brasileiro, ${(o as any).marital_status || ''}, ${(o as any).profession || ''}, CPF: ${o.cpf_cnpj}, residente e domiciliado na ${getAddr(o)}, com e-mail: ${o.email || ''} e telefone: ${o.phone || ''}`
-          ).join('; ');
-          return `Ilma. Sra.
-Oficial do Registro de Imóveis e Anexos de Montividiu/GO
-
-${signersText2}, venho requerer à V.S. que se digne a REGISTRAR/AVERBAR no Livro 02, matrícula(s): M. ${property.registration_number}, Registro Geral do SRI desta Comarca de Montividiu/GO, com emissão de certidão(ões), o(s) seguinte(s):
+          const signersText2 = allOwners2.map(o => {
+            const parts: string[] = [
+              o.name.toUpperCase(),
+              'Brasileiro',
+              (o as any).marital_status || null,
+              (o as any).profession || null,
+              `CPF: ${o.cpf_cnpj}`,
+              `residente e domiciliado na ${getAddr(o)}`,
+            ].filter(Boolean) as string[];
+            if (o.email && o.phone) parts.push(`com e-mail: ${o.email} e telefone: ${o.phone}`);
+            else if (o.email) parts.push(`com e-mail: ${o.email}`);
+            else if (o.phone) parts.push(`com telefone: ${o.phone}`);
+            return parts.join(', ');
+          }).join('; ');
+          return `Eu, ${signersText2}, venho requerer à V.S. que se digne a REGISTRAR/AVERBAR no Livro 02, matrícula(s): M. ${property.registration_number}, Registro Geral do SRI desta Comarca de Montividiu/GO, com emissão de certidão(ões), o(s) seguinte(s):
 
 1.\tGeorreferenciamento de Imóvel Rural - ${property.name.toUpperCase()}.
 Certificação SIGEF/INCRA: ${selectedCertification?.cert_number || project.certification_number || ''}
@@ -635,9 +645,7 @@ Pede Deferimento.`;
         const signersText3 = allOwners2.map((o) =>
           `${o.name.toUpperCase()}, ${(o as any).nationality || 'brasileiro'}, ${(o as any).marital_status || 'casado'}, ${(o as any).profession || 'produtor rural'}, portador do CPF/CNPJ nº ${o.cpf_cnpj}, residente e domiciliado em ${getAddr(o)}`
         ).join('; ');
-        return `Ilustríssimo(a) Sr(a). Oficial do ${genericRegistryName}, Comarca de ${genericRegistryCity}/GO.
-
-${signersText3}, proprietário(s) do imóvel rural denominado ${property.name.toUpperCase()}, localizado no município de ${property.municipality}/GO, inscrito sob a matrícula nº ${property.registration_number}, cadastrado no INCRA sob o nº ${property.incra_code || '________________'}, vem, respeitosamente, requerer a Vossa Senhoria a averbação do georreferenciamento do imóvel acima descrito, conforme Certificação SIGEF/INCRA nº ${genericCertNumber}, com área de ${property.area_ha} ha.
+        return `Eu, ${signersText3}, proprietário(s) do imóvel rural denominado ${property.name.toUpperCase()}, localizado no município de ${property.municipality}/GO, inscrito sob a matrícula nº ${property.registration_number}, cadastrado no INCRA sob o nº ${property.incra_code || '________________'}, vem, respeitosamente, requerer a Vossa Senhoria a averbação do georreferenciamento do imóvel acima descrito, conforme Certificação SIGEF/INCRA nº ${genericCertNumber}, com área de ${property.area_ha} ha.
 
 Declara(m), sob as penas da lei, que não houve alteração das divisas reais e efetivas do imóvel registrado, bem como foram respeitados os direitos dos confrontantes especificados nas plantas e memoriais descritivos em anexo.
 
@@ -744,7 +752,7 @@ Pede Deferimento.`;
       setGenerationProgress(10);
 
       const sideMargin = 10;
-      const topMargin = headerHeightMm + 2;
+      const topMargin = isRequerimento ? sideMargin : headerHeightMm + 2;
 
       const opt = {
         margin: [topMargin, sideMargin, 10, sideMargin],
@@ -765,8 +773,8 @@ Pede Deferimento.`;
       // Gerar conteúdo do PDF e obter o objeto jsPDF
       const pdf = await html2pdfLib().set(opt).from(docElement).toPdf().get('pdf');
 
-      // Adicionar a imagem do cabeçalho APENAS se showHeader for true
-      if (showHeader && headerImgData) {
+      // Adicionar a imagem do cabeçalho APENAS se showHeader for true e não for Requerimento
+      if (showHeader && headerImgData && !isRequerimento) {
         setGenerationMessage("Adicionando cabeçalho às páginas...");
         setGenerationProgress(70);
 
@@ -866,8 +874,27 @@ Pede Deferimento.`;
         }));
       }
 
-      // ── Requerimento title ───────────────────────────────────────────────
+      // ── Requerimento: destinatário (direita) + título (centro) ──────────
       if (isRequerimento) {
+        let docAddresseeLines: string[] = [];
+        if (selectedRegistry?.cns === '02.612-0') {
+          docAddresseeLines = ['Ilustríssimo Sr. Oficial do Registro de Imóveis da Comarca de Rio Verde, Estado de Goiás.'];
+        } else if (selectedRegistry?.cns === '02.648-4') {
+          docAddresseeLines = ['Ilma. Sra.', 'Oficial do Registro de Imóveis e Anexos de Montividiu/GO'];
+        } else {
+          const rName = selectedRegistry?.name || 'Registro de Imóveis competente';
+          const rCity = selectedRegistry?.municipality || property.municipality || '__________';
+          docAddresseeLines = [`Ilustríssimo(a) Sr(a). Oficial do ${rName}, Comarca de ${rCity}/GO.`];
+        }
+        for (const addrLine of docAddresseeLines) {
+          children.push(new Paragraph({
+            alignment: AlignmentType.RIGHT,
+            children: [new TextRun({ text: addrLine, size: 20 })],
+            spacing: { after: 60 },
+          }));
+        }
+        children.push(sp(300));
+
         const reqTitle = selectedRegistry?.cns === '02.648-4' ? 'REQUERIMENTO' : 'REQUERIMENTO PARA AVERBAÇÃO';
         children.push(new Paragraph({
           alignment: AlignmentType.CENTER,
@@ -1164,20 +1191,22 @@ Pede Deferimento.`;
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <div className="flex items-center bg-white border border-slate-200 rounded-lg p-0.5 shadow-sm mr-2">
-              <button
-                onClick={() => setShowHeader(true)}
-                className={`px-3 py-1.5 text-[10px] font-bold rounded-md transition-all ${showHeader ? 'bg-primary text-white shadow-sm' : 'text-slate-500 hover:bg-slate-50'}`}
-              >
-                Com Cabeçalho
-              </button>
-              <button
-                onClick={() => setShowHeader(false)}
-                className={`px-3 py-1.5 text-[10px] font-bold rounded-md transition-all ${!showHeader ? 'bg-primary text-white shadow-sm' : 'text-slate-500 hover:bg-slate-50'}`}
-              >
-                Sem Cabeçalho
-              </button>
-            </div>
+            {step.label !== 'Requerimento para o Cartório' && (
+              <div className="flex items-center bg-white border border-slate-200 rounded-lg p-0.5 shadow-sm mr-2">
+                <button
+                  onClick={() => setShowHeader(true)}
+                  className={`px-3 py-1.5 text-[10px] font-bold rounded-md transition-all ${showHeader ? 'bg-primary text-white shadow-sm' : 'text-slate-500 hover:bg-slate-50'}`}
+                >
+                  Com Cabeçalho
+                </button>
+                <button
+                  onClick={() => setShowHeader(false)}
+                  className={`px-3 py-1.5 text-[10px] font-bold rounded-md transition-all ${!showHeader ? 'bg-primary text-white shadow-sm' : 'text-slate-500 hover:bg-slate-50'}`}
+                >
+                  Sem Cabeçalho
+                </button>
+              </div>
+            )}
             {onReject && !isReceiptStep && (
               <button
                 onClick={onReject}
@@ -1392,11 +1421,13 @@ Pede Deferimento.`;
                 minHeight: isGenerating ? 'auto' : '297mm',
                 padding: isGenerating
                   ? '0'
-                  : '56mm 10mm 10mm 10mm' // Aumentado para acomodar logo maior
+                  : step.label === 'Requerimento para o Cartório'
+                    ? '10mm 10mm 10mm 10mm'
+                    : '56mm 10mm 10mm 10mm'
               }}
             >
               {/* HEADER INSTITUCIONAL (VISÍVEL APENAS NA TELA) */}
-              {!isGenerating && (
+              {!isGenerating && step.label !== 'Requerimento para o Cartório' && (
                 <div
                   className={`absolute top-0 left-0 right-0 transition-opacity duration-300 ${showHeader ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
                   style={{ height: '56mm' }}
@@ -1977,6 +2008,27 @@ Pede Deferimento.`;
                     className="text-slate-900 text-[12pt] leading-relaxed px-[5mm] pt-0 pb-[10mm]"
                     style={{ boxSizing: 'border-box' }}
                   >
+                    {/* Destinatário — parte superior direita (derivado dos dados do registro) */}
+                    {(() => {
+                      let addresseeLines: string[] = [];
+                      if (selectedRegistry?.cns === '02.612-0') {
+                        addresseeLines = ['Ilustríssimo Sr. Oficial do Registro de Imóveis da Comarca de Rio Verde, Estado de Goiás.'];
+                      } else if (selectedRegistry?.cns === '02.648-4') {
+                        addresseeLines = ['Ilma. Sra.', 'Oficial do Registro de Imóveis e Anexos de Montividiu/GO'];
+                      } else {
+                        const rName = selectedRegistry?.name || 'Registro de Imóveis competente';
+                        const rCity = selectedRegistry?.municipality || property.municipality || '__________';
+                        addresseeLines = [`Ilustríssimo(a) Sr(a). Oficial do ${rName}, Comarca de ${rCity}/GO.`];
+                      }
+                      return (
+                        <div className="text-right mb-6">
+                          {addresseeLines.map((line, i) => (
+                            <p key={i} className="text-[11pt] leading-snug">{line}</p>
+                          ))}
+                        </div>
+                      );
+                    })()}
+
                     <div className="text-center mb-4">
                       <h2 className="text-2xl font-black uppercase tracking-widest text-slate-900">
                         {selectedRegistry?.cns === '02.648-4' ? 'REQUERIMENTO' : 'REQUERIMENTO PARA AVERBAÇÃO'}
