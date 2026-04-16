@@ -57,6 +57,7 @@ interface ProjectWorkflowProps {
   budgetItemTemplates: BudgetItemTemplate[];
   onUpdateStep: (stepDbId: string, status: ProjectStatus, notes?: string, docNumber?: string) => void;
   onInitSteps: () => Promise<boolean>;
+  onEnsurePointControlStep?: () => Promise<string | null>;
   onBack: () => void;
   isAdmin: boolean;
   userName: string;
@@ -146,6 +147,7 @@ const ProjectWorkflow: React.FC<ProjectWorkflowProps> = ({
   budgetItemTemplates,
   onUpdateStep,
   onInitSteps,
+  onEnsurePointControlStep,
   onBack,
   isAdmin,
   userName,
@@ -280,8 +282,16 @@ const ProjectWorkflow: React.FC<ProjectWorkflowProps> = ({
   }, [notes, selectedStep?.id, isCriStep, selectedStep?.status, onUpdateStep]);
 
   // Auto-save for points (bottom widget) — saves to the POINT_CONTROL step
+  const isCreatingPointControlRef = React.useRef(false);
   useEffect(() => {
-    if (!pointControlStep?.id) return;
+    if (!pointControlStep?.id) {
+      // Step doesn't exist yet — create it on-demand when user enters a point
+      if (onEnsurePointControlStep && !isCreatingPointControlRef.current && (pointsState.m || pointsState.p || pointsState.v)) {
+        isCreatingPointControlRef.current = true;
+        onEnsurePointControlStep().finally(() => { isCreatingPointControlRef.current = false; });
+      }
+      return;
+    }
     const currentJson = JSON.stringify(pointsState);
     if (currentJson === lastSavedPointsRef.current) {
       setIsSavingPoints(false);
@@ -297,7 +307,7 @@ const ProjectWorkflow: React.FC<ProjectWorkflowProps> = ({
     return () => {
       if (pointsSaveTimeoutRef.current) window.clearTimeout(pointsSaveTimeoutRef.current);
     };
-  }, [pointsState, pointControlStep?.id, pointControlStep?.status, onUpdateStep]);
+  }, [pointsState, pointControlStep?.id, pointControlStep?.status, onUpdateStep, onEnsurePointControlStep]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {

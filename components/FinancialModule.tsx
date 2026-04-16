@@ -59,8 +59,9 @@ import {
   Legend
 } from 'recharts';
 import DREPDF from './DREPDF';
-import { PDFDownloadLink } from '@react-pdf/renderer';
+import { pdf } from '@react-pdf/renderer';
 import ReportPDF from './ReportPDF';
+import FinancialReport from './FinancialReport';
 
 interface FinancialModuleProps {
   transactions: FinancialTransaction[];
@@ -208,6 +209,8 @@ const FinancialModule: React.FC<FinancialModuleProps> = ({
 
   const [includePreviousBalance, setIncludePreviousBalance] = useState(false);
   const [previousBalance, setPreviousBalance] = useState('0');
+  const [isExportingFluxoPDF, setIsExportingFluxoPDF] = useState(false);
+  const [isExportingDREPDF, setIsExportingDREPDF] = useState(false);
 
   // Report states
   const [reportStartDate, setReportStartDate] = useState('');
@@ -526,6 +529,54 @@ const FinancialModule: React.FC<FinancialModuleProps> = ({
 
     return { structure, details };
   }, [transactions, dreYear, dreScope]);
+
+  const handleExportFluxoPDF = async () => {
+    setIsExportingFluxoPDF(true);
+    try {
+      const blob = await pdf(
+        <ReportPDF
+          reportData={filteredTransactions}
+          previousBalance={filteredStats.prev}
+          includePreviousBalance={includePreviousBalance}
+        />
+      ).toBlob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `lancamentos-${monthFilter || 'filtrados'}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Erro ao gerar PDF de lançamentos:', err);
+      alert('Erro ao gerar PDF. Tente novamente.');
+    } finally {
+      setIsExportingFluxoPDF(false);
+    }
+  };
+
+  const handleExportDREPDF = async () => {
+    setIsExportingDREPDF(true);
+    try {
+      const blob = await pdf(
+        <DREPDF dreData={dreData} year={dreYear} scope={dreScope} />
+      ).toBlob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `DRE_${dreYear}_${dreScope === 'ALL' ? 'Todos' : dreScope}_${new Date().toISOString().split('T')[0]}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Erro ao gerar PDF do DRE:', err);
+      alert('Erro ao gerar PDF. Tente novamente.');
+    } finally {
+      setIsExportingDREPDF(false);
+    }
+  };
 
   const reminders = useMemo(() => {
     const today = new Date();
@@ -1595,19 +1646,13 @@ const FinancialModule: React.FC<FinancialModuleProps> = ({
                 </div>
 
                 {/* Exportar PDF */}
-                <PDFDownloadLink
-                  document={
-                    <ReportPDF
-                      reportData={filteredTransactions}
-                      previousBalance={filteredStats.prev}
-                      includePreviousBalance={includePreviousBalance}
-                    />
-                  }
-                  fileName={`lancamentos-${monthFilter || 'filtrados'}.pdf`}
-                  className="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-primary-dark shadow-md shadow-primary/10 transition-all whitespace-nowrap"
+                <button
+                  onClick={handleExportFluxoPDF}
+                  disabled={isExportingFluxoPDF}
+                  className="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-primary-dark shadow-md shadow-primary/10 transition-all whitespace-nowrap disabled:opacity-60"
                 >
-                  {({ loading }: { loading: boolean }) => loading ? 'Gerando...' : <><FileText size={14} /> Exportar PDF</>}
-                </PDFDownloadLink>
+                  {isExportingFluxoPDF ? <><Loader2 size={14} className="animate-spin" /> Gerando...</> : <><FileText size={14} /> Exportar PDF</>}
+                </button>
               </div>
 
               <div className="table-responsive">
@@ -1936,6 +1981,14 @@ const FinancialModule: React.FC<FinancialModuleProps> = ({
       }
 
       {
+        activeTab === 'RELATORIOS' && (
+          <div className="animate-in fade-in slide-in-from-right-4 duration-500">
+            <FinancialReport transactions={transactions} />
+          </div>
+        )
+      }
+
+      {
         activeTab === 'DRE' && (
           <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-500">
             <div className="bg-white p-6 rounded-2xl border border-slate-200/40 shadow-sm flex flex-wrap items-center justify-between gap-4">
@@ -1982,24 +2035,13 @@ const FinancialModule: React.FC<FinancialModuleProps> = ({
                     )}
                   </p>
                 </div>
-                <PDFDownloadLink
-                  document={<DREPDF
-                    dreData={dreData}
-                    year={dreYear}
-                    scope={dreScope}
-                  />}
-                  fileName={`DRE_${dreYear}_${dreScope === 'ALL' ? 'Todos' : dreScope}_${new Date().toISOString().split('T')[0]}.pdf`}
+                <button
+                  onClick={handleExportDREPDF}
+                  disabled={isExportingDREPDF}
+                  className="px-6 py-2 bg-primary text-white rounded-xl font-black uppercase tracking-widest shadow-lg shadow-primary/10 hover:bg-primary-dark transition-all flex items-center justify-center gap-2 text-[10px] disabled:opacity-60"
                 >
-                  {({ loading }) => (
-                    <button
-                      className="px-6 py-2 bg-primary text-white rounded-xl font-black uppercase tracking-widest shadow-lg shadow-primary/10 hover:bg-primary-dark transition-all flex items-center justify-center gap-2 text-[10px]"
-                      disabled={loading}
-                    >
-                      <FileText size={16} />
-                      {loading ? '...' : 'Exportar PDF'}
-                    </button>
-                  )}
-                </PDFDownloadLink>
+                  {isExportingDREPDF ? <><Loader2 size={16} className="animate-spin" /> Gerando...</> : <><FileText size={16} /> Exportar PDF</>}
+                </button>
               </div>
             </div>
 

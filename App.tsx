@@ -662,7 +662,7 @@ const App: React.FC = () => {
           stepsToCreate = CAR_WORKFLOW_STEPS_DEFINITION;
         }
 
-        const steps = stepsToCreate.map((s, i) => {
+        const steps: any[] = stepsToCreate.map((s, i) => {
           let label = s.label;
           if (s.id === WorkflowStepId.DOCUMENTATION && selectedService?.name) {
             label = `${s.label} - ${selectedService.name}`;
@@ -675,6 +675,15 @@ const App: React.FC = () => {
             status: i === 0 ? ProjectStatus.IN_PROGRESS : ProjectStatus.NOT_STARTED,
             user_id: uid
           };
+        });
+
+        steps.push({
+          project_id: data.id,
+          step_id: WorkflowStepId.POINT_CONTROL,
+          label: 'Controle de Pontos',
+          has_document: false,
+          status: ProjectStatus.IN_PROGRESS,
+          user_id: uid
         });
 
         await supabase.from('project_steps').insert(steps);

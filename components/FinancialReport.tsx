@@ -11,8 +11,11 @@ import {
     Info,
     CheckCircle2,
     Clock,
-    ArrowRightLeft
+    ArrowRightLeft,
+    Loader2
 } from 'lucide-react';
+import { pdf } from '@react-pdf/renderer';
+import ReportPDF from './ReportPDF';
 import {
     FinancialTransaction,
     TransactionType,
@@ -55,6 +58,33 @@ const FinancialReport: React.FC<FinancialReportProps> = ({ transactions }) => {
     });
     const [entryType, setEntryType] = useState<EntryTypeFilter>('AMBOS');
     const [reportType, setReportType] = useState<ReportTypeFilter>('REAL');
+    const [isExportingPDF, setIsExportingPDF] = useState(false);
+
+    const handleExportPDF = async () => {
+        setIsExportingPDF(true);
+        try {
+            const blob = await pdf(
+                <ReportPDF
+                    reportData={filteredData}
+                    startDate={startDate}
+                    endDate={endDate}
+                />
+            ).toBlob();
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `relatorio-financeiro-${startDate}-${endDate}.pdf`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        } catch (err) {
+            console.error('Erro ao gerar PDF do relatório:', err);
+            alert('Erro ao gerar PDF. Tente novamente.');
+        } finally {
+            setIsExportingPDF(false);
+        }
+    };
 
     const filteredData = useMemo(() => {
         return transactions.filter(t => {
@@ -144,12 +174,21 @@ const FinancialReport: React.FC<FinancialReportProps> = ({ transactions }) => {
                         </div>
                     </h2>
                 </div>
-                <button
-                    onClick={exportCSV}
-                    className="flex items-center gap-2 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold transition-all border border-slate-200/40"
-                >
-                    <Download size={14} /> Exportar CSV
-                </button>
+                <div className="flex items-center gap-2">
+                    <button
+                        onClick={exportCSV}
+                        className="flex items-center gap-2 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold transition-all border border-slate-200/40"
+                    >
+                        <Download size={14} /> Exportar CSV
+                    </button>
+                    <button
+                        onClick={handleExportPDF}
+                        disabled={isExportingPDF}
+                        className="flex items-center gap-2 px-3 py-1.5 bg-primary text-white rounded-lg text-xs font-bold transition-all hover:bg-primary-dark shadow-md shadow-primary/10 disabled:opacity-60"
+                    >
+                        {isExportingPDF ? <><Loader2 size={14} className="animate-spin" /> Gerando...</> : <><FileText size={14} /> Exportar PDF</>}
+                    </button>
+                </div>
             </div>
 
             {/* Filters Box */}

@@ -219,8 +219,14 @@ const AppRouter: React.FC<AppRouterProps> = ({
                   stepsToCreate = CAR_WORKFLOW_STEPS_DEFINITION;
                 }
 
-                await supabase.from('project_steps').delete().eq('project_id', currentProject.id);
-                const steps = stepsToCreate.map((s, i) => ({
+                // Preserve POINT_CONTROL step notes when re-initializing
+                const existingPointControl = currentProject.steps?.find(s => s.step_id === WorkflowStepId.POINT_CONTROL);
+
+                await supabase.from('project_steps').delete()
+                  .eq('project_id', currentProject.id)
+                  .neq('step_id', WorkflowStepId.POINT_CONTROL);
+
+                const steps: any[] = stepsToCreate.map((s, i) => ({
                   project_id: currentProject.id,
                   step_id: s.id,
                   label: s.label,
@@ -229,10 +235,40 @@ const AppRouter: React.FC<AppRouterProps> = ({
                   user_id: uid
                 }));
 
+                if (!existingPointControl) {
+                  steps.push({
+                    project_id: currentProject.id,
+                    step_id: WorkflowStepId.POINT_CONTROL,
+                    label: 'Controle de Pontos',
+                    has_document: false,
+                    status: ProjectStatus.IN_PROGRESS,
+                    user_id: uid
+                  });
+                }
+
                 await supabase.from('project_steps').insert(steps);
                 fetchInitialData(uid);
                 return true;
               } catch (e) { return false; }
+            }}
+            onEnsurePointControlStep={async () => {
+              const uid = userIdRef.current;
+              if (!uid) return null;
+              const existing = currentProject.steps?.find(s => s.step_id === WorkflowStepId.POINT_CONTROL);
+              if (existing?.id) return existing.id;
+              try {
+                const { data, error } = await supabase.from('project_steps').insert({
+                  project_id: currentProject.id,
+                  step_id: WorkflowStepId.POINT_CONTROL,
+                  label: 'Controle de Pontos',
+                  has_document: false,
+                  status: ProjectStatus.IN_PROGRESS,
+                  user_id: uid
+                }).select().single();
+                if (error) throw error;
+                await fetchInitialData(uid);
+                return data?.id ?? null;
+              } catch (e) { return null; }
             }}
             onBack={() => setCurrentView('PROJECTS')}
             isAdmin={role === 'admin'}
