@@ -1,5 +1,5 @@
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import {
   Briefcase,
   CheckCircle2,
@@ -15,11 +15,16 @@ import {
   ArrowUpRight,
   ArrowDownRight,
   DollarSign,
-  Map as MapIcon
+  Map as MapIcon,
+  Cake,
+  FileText,
+  ChevronRight
 } from 'lucide-react';
 import { formatDate } from '../utils';
-import { Project, ProjectStatus, WorkflowStepId, Appointment, Client, FinancialTransaction, TransactionType, TransactionStatus } from '../types';
+import { Project, ProjectStatus, WorkflowStepId, Appointment, Client, FinancialTransaction, TransactionType, TransactionStatus, NotaDevolutiva, Exigencia } from '../types';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recharts';
+import { supabase } from '../lib/supabase';
+import { useAuth } from '../contexts/AuthContext';
 
 interface DashboardProps {
   projects: Project[];
@@ -110,6 +115,26 @@ const Dashboard: React.FC<DashboardProps> = ({ projects, appointments, clients, 
   const urgentDeadlines = getUrgentDeadlines();
   const stagnantProjects = getStagnantCriticalSteps();
   const upcomingAppointments = getUpcomingAppointments();
+
+  const upcomingBirthdays = useMemo(() => {
+    const today = new Date();
+    const todayMonth = today.getMonth() + 1;
+    const todayDay = today.getDate();
+
+    return clients
+      .filter(c => c.birth_date)
+      .map(c => {
+        const [year, month, day] = c.birth_date!.split('-').map(Number);
+        let daysUntil = (new Date(today.getFullYear(), month - 1, day).getTime() - new Date(today.getFullYear(), todayMonth - 1, todayDay).getTime()) / (1000 * 60 * 60 * 24);
+        if (daysUntil < 0) {
+          daysUntil = (new Date(today.getFullYear() + 1, month - 1, day).getTime() - new Date(today.getFullYear(), todayMonth - 1, todayDay).getTime()) / (1000 * 60 * 60 * 24);
+        }
+        const age = today.getFullYear() - year + (daysUntil === 0 ? 0 : -1) + (daysUntil <= 0 || (month - 1 < todayMonth - 1 || (month - 1 === todayMonth - 1 && day <= todayDay)) ? 1 : 0);
+        return { client: c, daysUntil: Math.round(daysUntil), month, day, age: today.getFullYear() - year };
+      })
+      .filter(b => b.daysUntil <= 30)
+      .sort((a, b) => a.daysUntil - b.daysUntil);
+  }, [clients]);
 
   const todayStr = new Date().toISOString().split('T')[0];
   const todayTransactions = transactions.filter(t => t.due_date === todayStr);
@@ -370,6 +395,46 @@ const Dashboard: React.FC<DashboardProps> = ({ projects, appointments, clients, 
             </div>
           </div>
 
+          {/* Aniversários dos Clientes */}
+          {upcomingBirthdays.length > 0 && (
+            <div className="glass-card rounded-3xl overflow-hidden shadow-premium border-t-8 border-pink-400">
+              <div className="p-5 flex items-center justify-between border-b border-border-light bg-pink-50/30">
+                <h3 className="text-[10px] font-semibold text-pink-600 uppercase tracking-[0.2em] flex items-center gap-3">
+                  <Cake size={18} /> Aniversários
+                </h3>
+                <span className="text-[9px] font-bold text-pink-500 bg-white px-2 py-1 rounded-lg border border-pink-100 shadow-sm">
+                  Próximos 30 dias
+                </span>
+              </div>
+              <div className="divide-y divide-border-light max-h-[380px] overflow-y-auto custom-scrollbar">
+                {upcomingBirthdays.map(({ client, daysUntil, day, month, age }) => {
+                  const isToday = daysUntil === 0;
+                  const isSoon = daysUntil <= 3;
+                  return (
+                    <div key={client.id} className={`p-4 hover:bg-slate-50 transition-all group ${isToday ? 'bg-pink-50/50' : ''}`}>
+                      <div className="flex justify-between items-center gap-2">
+                        <div className="flex items-center gap-3 overflow-hidden">
+                          <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 shadow-soft ${isToday ? 'bg-pink-500 text-white' : isSoon ? 'bg-pink-100 text-pink-500' : 'bg-slate-100 text-slate-400'}`}>
+                            <Cake size={16} />
+                          </div>
+                          <div className="overflow-hidden">
+                            <p className="text-xs font-semibold text-slate-800 truncate tracking-tight">{client.name}</p>
+                            <p className="text-[10px] text-slate-400 font-medium uppercase tracking-widest">
+                              {String(day).padStart(2, '0')}/{String(month).padStart(2, '0')} • {age} anos
+                            </p>
+                          </div>
+                        </div>
+                        <span className={`text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded-lg shrink-0 ${isToday ? 'bg-pink-500 text-white shadow-sm' : isSoon ? 'bg-pink-100 text-pink-600' : 'bg-slate-100 text-slate-500'}`}>
+                          {isToday ? '🎂 Hoje!' : `${daysUntil}d`}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           {/* Pendências Financeiras Urgentes (Top 10) */}
           {urgentFinance.length > 0 && (
             <div className="glass-card rounded-3xl overflow-hidden shadow-premium border-t-8 border-rose-500">
@@ -533,6 +598,148 @@ const Dashboard: React.FC<DashboardProps> = ({ projects, appointments, clients, 
           </div>
         </div>
       </div>
+
+      {/* Notas Devolutivas — Exigências Pendentes (full-width) */}
+      <NotasDevolutivasWidget projects={projects} onProjectSelect={onProjectSelect} />
+    </div>
+  );
+};
+
+/* ──────────────────────────────────────────────────────────
+   Widget: Notas Devolutivas com Exigências Pendentes
+────────────────────────────────────────────────────────── */
+interface NotasDevolutivasWidgetProps {
+  projects: Project[];
+  onProjectSelect: (id: string) => void;
+}
+
+const NotasDevolutivasWidget: React.FC<NotasDevolutivasWidgetProps> = ({ projects, onProjectSelect }) => {
+  const { user } = useAuth();
+  const [notas, setNotas] = useState<NotaDevolutiva[]>([]);
+  const [exigencias, setExigencias] = useState<Exigencia[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!user) return;
+    const fetchPending = async () => {
+      setLoading(true);
+      try {
+        const { data: exigData } = await supabase
+          .from('exigencias')
+          .select('*')
+          .eq('user_id', user.id)
+          .eq('status', 'pendente')
+          .order('created_at', { ascending: true });
+
+        const pendingExigs = exigData || [];
+        if (pendingExigs.length === 0) { setExigencias([]); setNotas([]); setLoading(false); return; }
+
+        const notaIds = [...new Set(pendingExigs.map(e => e.nota_id))];
+        const { data: notasData } = await supabase
+          .from('notas_devolutivas')
+          .select('*')
+          .in('id', notaIds)
+          .eq('user_id', user.id);
+
+        setExigencias(pendingExigs);
+        setNotas(notasData || []);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchPending();
+  }, [user]);
+
+  const byProject = useMemo(() => {
+    const map = new Map<string, { project: Project | undefined; notas: Array<{ nota: NotaDevolutiva; exigs: Exigencia[] }> }>();
+    notas.forEach(nota => {
+      const project = projects.find(p => p.id === nota.project_id);
+      const exigs = exigencias.filter(e => e.nota_id === nota.id);
+      if (exigs.length === 0) return;
+      const pid = nota.project_id;
+      if (!map.has(pid)) map.set(pid, { project, notas: [] });
+      map.get(pid)!.notas.push({ nota, exigs });
+    });
+    return [...map.values()].sort((a, b) => (b.notas.reduce((s, n) => s + n.exigs.length, 0)) - (a.notas.reduce((s, n) => s + n.exigs.length, 0)));
+  }, [notas, exigencias, projects]);
+
+  const total = exigencias.length;
+  if (!loading && total === 0) return null;
+
+  return (
+    <div className="glass-card rounded-3xl overflow-hidden shadow-premium border-t-8 border-indigo-500">
+      <div className="p-5 flex items-center justify-between border-b border-border-light bg-indigo-50/30">
+        <h3 className="text-[10px] font-semibold text-indigo-700 uppercase tracking-[0.2em] flex items-center gap-3">
+          <FileText size={18} /> Notas Devolutivas — Exigências Pendentes
+        </h3>
+        {total > 0 && (
+          <span className="text-[9px] font-black text-indigo-600 bg-white px-3 py-1 rounded-lg border border-indigo-100 shadow-sm">
+            {total} pendente{total !== 1 ? 's' : ''}
+          </span>
+        )}
+      </div>
+
+      {loading ? (
+        <div className="p-8 text-center text-[10px] text-slate-400 font-medium animate-pulse uppercase tracking-widest">Carregando...</div>
+      ) : (
+        <div className="divide-y divide-border-light max-h-[420px] overflow-y-auto custom-scrollbar">
+          {byProject.map(({ project, notas: notasGroup }) => {
+            const totalPend = notasGroup.reduce((s, n) => s + n.exigs.length, 0);
+            return (
+              <div key={notasGroup[0].nota.project_id} className="p-5 hover:bg-slate-50 transition-all">
+                {/* Projeto */}
+                <button
+                  onClick={() => project && onProjectSelect(project.id)}
+                  className="w-full flex items-center justify-between gap-3 mb-3 group/proj"
+                >
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="text-[9px] font-black text-indigo-600 uppercase tracking-widest bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100 shrink-0">
+                      #{project?.project_number || '—'}
+                    </span>
+                    <span className="text-xs font-semibold text-slate-800 truncate group-hover/proj:text-indigo-700 transition-colors">
+                      {project?.title || 'Projeto não encontrado'}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className="text-[9px] font-bold text-amber-700 bg-amber-50 border border-amber-100 px-2 py-0.5 rounded-lg">
+                      {totalPend} exig.
+                    </span>
+                    <ChevronRight size={14} className="text-slate-300 group-hover/proj:text-indigo-500 transition-colors" />
+                  </div>
+                </button>
+
+                {/* Notas e exigências */}
+                <div className="space-y-2 pl-1">
+                  {notasGroup.map(({ nota, exigs }) => (
+                    <div key={nota.id} className="rounded-xl border border-slate-100 bg-white overflow-hidden shadow-sm">
+                      <div className="px-3 py-2 bg-indigo-50/60 border-b border-indigo-100/50 flex items-center gap-2">
+                        <FileText size={11} className="text-indigo-400 shrink-0" />
+                        <span className="text-[9px] font-bold text-indigo-600 uppercase tracking-wider">
+                          Nota {nota.numero_nota || '—'}
+                        </span>
+                        {nota.protocolo && (
+                          <span className="text-[9px] text-slate-400 font-medium">· Prot. {nota.protocolo}</span>
+                        )}
+                        {nota.vinculo && (
+                          <span className="text-[9px] text-slate-400 font-medium truncate">· {nota.vinculo}</span>
+                        )}
+                      </div>
+                      <ul className="divide-y divide-slate-50">
+                        {exigs.map(exig => (
+                          <li key={exig.id} className="flex items-start gap-2 px-3 py-2">
+                            <Clock size={11} className="text-amber-500 mt-0.5 shrink-0" />
+                            <span className="text-[11px] text-slate-600 font-medium leading-snug">{exig.descricao}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 };

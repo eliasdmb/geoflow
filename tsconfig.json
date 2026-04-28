@@ -11,7 +11,9 @@
     ],
     "skipLibCheck": true,
     "types": [
-      "node"
+      "node",
+      "leaflet",
+      "leaflet-draw"
     ],
     "moduleResolution": "bundler",
     "isolatedModules": true,

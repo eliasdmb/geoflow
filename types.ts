@@ -102,6 +102,7 @@ export interface Client {
   email?: string;
   phone?: string;
   nationality?: string;
+  birth_date?: string;
 }
 
 export interface RuralProperty {
@@ -315,4 +316,24 @@ export interface Budget {
   created_at: string;
 }
 
-export type ViewState = 'DASHBOARD' | 'PROJECTS' | 'CLIENTS' | 'PROPERTIES' | 'PROFESSIONALS' | 'REGISTRIES' | 'SIGEF_CERTIFICATIONS' | 'SERVICES' | 'BUDGET_TEMPLATES' | 'PROJECT_DETAILS' | 'FINANCIAL' | 'CALENDAR' | 'FINANCIAL_REPORT';
+export interface NotaDevolutiva {
+  id: string;
+  user_id: string;
+  project_id: string;
+  numero_nota: string;
+  protocolo: string;
+  vinculo: string;
+  created_at: string;
+}
+
+export interface Exigencia {
+  id: string;
+  user_id: string;
+  nota_id: string;
+  descricao: string;
+  status: 'pendente' | 'concluida';
+  concluded_at?: string;
+  created_at: string;
+}
+
+export type ViewState = 'DASHBOARD' | 'PROJECTS' | 'CLIENTS' | 'PROPERTIES' | 'PROFESSIONALS' | 'REGISTRIES' | 'SIGEF_CERTIFICATIONS' | 'SERVICES' | 'BUDGET_TEMPLATES' | 'PROJECT_DETAILS' | 'FINANCIAL' | 'CALENDAR' | 'FINANCIAL_REPORT' | 'CAD' | 'PROFILE';

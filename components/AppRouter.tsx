@@ -19,6 +19,7 @@ import CalendarView from './CalendarView';
 import FinancialReport from './FinancialReport';
 import ProtectedRoute from './ProtectedRoute';
 import ProfileSettings from './ProfileSettings';
+import CadModule from './CadModule';
 
 interface AppRouterProps {
   currentView: ViewState;
@@ -287,6 +288,7 @@ const AppRouter: React.FC<AppRouterProps> = ({
       case 'BUDGET_TEMPLATES': return <BudgetItemTemplateList templates={budgetItemTemplates} onSaveTemplate={(t, id) => handleUpsert('budget_templates', t, fetchInitialData, id)} onDeleteTemplate={(id) => handleDelete('budget_templates', id)} />;
       case 'SIGEF_CERTIFICATIONS': return <SigefCertificationList certifications={sigefCertifications} onSaveCertification={(c, id) => handleUpsert('sigef_certifications', c, fetchInitialData, id)} onDeleteCertification={(id) => handleDelete('sigef_certifications', id)} />;
       case 'FINANCIAL_REPORT': return <FinancialReport transactions={transactions} projects={projects} />;
+      case 'CAD': return <CadModule />;
       case 'CALENDAR': return <CalendarView
         appointments={appointments}
         tasks={tasks}

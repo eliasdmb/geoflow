@@ -40,7 +40,8 @@ const ClientList: React.FC<ClientListProps> = ({ clients, onSaveClient, onDelete
     marital_status: '',
     profession: '',
     email: '',
-    phone: ''
+    phone: '',
+    birth_date: ''
   });
 
   const handleEdit = (client: Client) => {
@@ -58,7 +59,8 @@ const ClientList: React.FC<ClientListProps> = ({ clients, onSaveClient, onDelete
       marital_status: client.marital_status || '',
       profession: client.profession || '',
       email: client.email || '',
-      phone: client.phone || ''
+      phone: client.phone || '',
+      birth_date: client.birth_date || ''
     });
     setShowModal(true);
   };
@@ -77,7 +79,8 @@ const ClientList: React.FC<ClientListProps> = ({ clients, onSaveClient, onDelete
       marital_status: formData.marital_status,
       profession: formData.profession,
       email: formData.email,
-      phone: formData.phone
+      phone: formData.phone,
+      birth_date: formData.birth_date || undefined
     }, editingId || undefined);
 
     setShowModal(false);
@@ -92,7 +95,8 @@ const ClientList: React.FC<ClientListProps> = ({ clients, onSaveClient, onDelete
       marital_status: '',
       profession: '',
       email: '',
-      phone: ''
+      phone: '',
+      birth_date: ''
     });
     setErrors({});
     setEditingId(null);
@@ -309,6 +313,11 @@ const ClientList: React.FC<ClientListProps> = ({ clients, onSaveClient, onDelete
                   <label className="block text-[11px] font-bold text-slate-800 uppercase tracking-wider mb-2">Telefone</label>
                   <input placeholder="Ex: (62) 99999-9999" className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40 transition-all font-medium text-slate-700 shadow-sm" value={formData.phone} onChange={e => setFormData({ ...formData, phone: e.target.value })} />
                 </div>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-800 uppercase tracking-wider mb-2">Data de Nascimento</label>
+                <input type="date" className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40 transition-all font-medium text-slate-700 shadow-sm" value={formData.birth_date} onChange={e => setFormData({ ...formData, birth_date: e.target.value })} />
               </div>
 
               <div>

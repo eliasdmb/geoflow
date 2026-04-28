@@ -13,6 +13,7 @@ interface NavbarProps {
     currentView: ViewState;
     isSidebarOpen: boolean;
     setIsSidebarOpen: (open: boolean) => void;
+    setCurrentView: (view: ViewState) => void;
     user: any;
     onLogout: () => void;
 }
@@ -21,6 +22,7 @@ const Navbar: React.FC<NavbarProps> = ({
     currentView,
     isSidebarOpen,
     setIsSidebarOpen,
+    setCurrentView,
     user,
     onLogout
 }) => {
@@ -62,6 +64,12 @@ const Navbar: React.FC<NavbarProps> = ({
                 break;
             case 'BUDGET_TEMPLATES':
                 crumbs.push({ label: 'Modelos', active: true });
+                break;
+            case 'CAD':
+                crumbs.push({ label: 'CAD GNSS', active: true });
+                break;
+            case 'PROFILE':
+                crumbs.push({ label: 'Meu Perfil', active: true });
                 break;
             default:
                 break;
@@ -121,9 +129,13 @@ const Navbar: React.FC<NavbarProps> = ({
                         </span>
                     </div>
 
-                    <div className="w-9 h-9 bg-slate-100 rounded-full flex items-center justify-center text-slate-400 border border-slate-200">
+                    <button
+                        onClick={() => setCurrentView('PROFILE')}
+                        title="Meu Perfil"
+                        className={`w-9 h-9 rounded-full flex items-center justify-center border transition-all hover:scale-105 ${currentView === 'PROFILE' ? 'bg-primary text-white border-primary' : 'bg-slate-100 text-slate-400 border-slate-200 hover:bg-slate-200'}`}
+                    >
                         <UserIcon size={20} />
-                    </div>
+                    </button>
 
                     <button
                         onClick={onLogout}

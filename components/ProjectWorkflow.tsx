@@ -40,6 +40,7 @@ import {
 import { Project, Client, RuralProperty, Professional, WorkflowStepId, ProjectStatus, SigefCertification, Service, BudgetItemTemplate, Registry, FinancialTransaction, ProjectExpense, TransactionType } from '../types';
 import { WORKFLOW_STEPS_DEFINITION, CAR_WORKFLOW_STEPS_DEFINITION } from '../constants';
 import DocumentPreview from './DocumentPreview';
+import NotasDevolutivasPanel from './NotasDevolutivasPanel';
 
 interface ProjectWorkflowProps {
   project: Project;
@@ -1168,7 +1169,11 @@ const ProjectWorkflow: React.FC<ProjectWorkflowProps> = ({
       </div>
       {/* ============================================================ */}
 
-
+      {/* ===================== NOTAS DEVOLUTIVAS ===================== */}
+      <div className="mt-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
+        <NotasDevolutivasPanel projectId={project.id} />
+      </div>
+      {/* ============================================================ */}
 
       {showDocPreview && (
         <DocumentPreview

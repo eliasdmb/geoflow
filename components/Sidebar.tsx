@@ -13,7 +13,8 @@ import {
   FileText,
   Wrench,
   ExternalLink,
-  ChevronRight
+  ChevronRight,
+  Layers
 } from 'lucide-react';
 import { ViewState, Appointment } from '../types';
 
@@ -204,6 +205,12 @@ const Sidebar: React.FC<SidebarProps> = ({
                 onClick={() => handleNavClick('FINANCIAL')}
               />
             )}
+          </div>
+
+          {/* CATEGORY: CAD */}
+          <div className="space-y-1">
+            {isSidebarOpen && <h3 className="px-4 text-[9px] font-black text-slate-400 uppercase tracking-[0.15em] mb-3">Geotecnologia</h3>}
+            <NavItem icon={<Layers />} label="CAD GNSS" active={currentView === 'CAD'} collapsed={!isSidebarOpen} onClick={() => handleNavClick('CAD')} />
           </div>
 
           {/* CATEGORY: DOCUMENTAL */}

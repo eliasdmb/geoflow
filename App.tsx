@@ -777,6 +777,7 @@ const App: React.FC = () => {
           currentView={currentView}
           isSidebarOpen={isSidebarOpen}
           setIsSidebarOpen={setIsSidebarOpen}
+          setCurrentView={setCurrentView}
           user={user}
           onLogout={logout}
         />
